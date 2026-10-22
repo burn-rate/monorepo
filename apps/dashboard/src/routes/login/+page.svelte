@@ -118,12 +118,14 @@
   main {
     max-width: 28rem;
     margin: 0 auto;
-    padding: 3rem 1.5rem;
+    padding: var(--space-12) var(--space-6);
     display: grid;
-    gap: 1.5rem;
+    gap: var(--space-6);
   }
 
   h1 {
+    font-size: var(--text-3xl);
+    line-height: var(--leading-tight);
     text-align: center;
     color: var(--color-frosting);
     text-shadow: var(--shadow-sprinkle);
@@ -134,50 +136,63 @@
   }
 
   .card {
-    border: 1px solid var(--color-border, #333);
-    border-radius: 0.75rem;
-    padding: 1.25rem;
+    background: var(--color-surface);
+    border: 1px solid var(--color-crust);
+    border-radius: var(--radius-doughnut);
+    box-shadow: var(--shadow-sprinkle);
+    padding: var(--space-5);
     display: grid;
-    gap: 0.75rem;
+    gap: var(--space-3);
   }
 
   h2 {
     margin: 0;
-    font-size: 1.1rem;
+    font-size: var(--text-lg);
   }
 
   .hint,
   .optional {
     color: var(--color-text-muted);
-    font-size: 0.875rem;
+    font-size: var(--text-sm);
     margin: 0;
   }
 
   form {
     display: grid;
-    gap: 0.75rem;
+    gap: var(--space-3);
   }
 
   label {
     display: grid;
-    gap: 0.25rem;
-    font-size: 0.875rem;
+    gap: var(--space-1);
+    font-size: var(--text-sm);
   }
 
   input {
-    padding: 0.5rem 0.75rem;
-    border-radius: 0.5rem;
-    border: 1px solid var(--color-border, #333);
-    background: transparent;
+    padding: var(--space-2) var(--space-3);
+    border-radius: var(--radius-sprinkle);
+    border: 1px solid var(--color-crust-strong);
+    background: var(--color-surface);
     color: inherit;
+    font-family: inherit;
+    font-size: var(--text-base);
   }
 
   button {
-    padding: 0.5rem 1rem;
-    border-radius: 0.5rem;
+    padding: var(--space-2) var(--space-4);
+    border-radius: var(--radius-hole);
     border: none;
+    background: var(--color-frosting);
+    color: var(--color-on-frosting);
+    font-family: inherit;
+    font-size: var(--text-sm);
+    font-weight: var(--font-medium);
     cursor: pointer;
     justify-self: start;
+  }
+
+  button:hover:not(:disabled) {
+    background: var(--color-frosting-strong);
   }
 
   button:disabled {
@@ -186,7 +201,7 @@
   }
 
   .error {
-    color: #ff6b6b;
+    color: var(--color-danger);
     margin: 0;
   }
 </style>

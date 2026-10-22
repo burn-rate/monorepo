@@ -7,7 +7,7 @@ import { KNOWN_METRIC_NAMES } from './metrics';
  * upsert deduplicates on (userId, metric, time, endedAt, sourceName).
  */
 export const normalizedSampleSchema = z.object({
-  /** Trusted account identity supplied by the ingestion-token resolver. */
+  /** Owning account: resolved from an ingestion bearer token, or the /ingest/:userId path. */
   userId: z.string().min(1),
   metric: z.enum(KNOWN_METRIC_NAMES),
   /** Sample start. Hypertable partition column. */
