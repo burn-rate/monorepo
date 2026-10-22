@@ -126,8 +126,8 @@ missing configuration, connection failure, a changed applied-file checksum, or
 any failed SQL stop the job before
 Worker deployment. Connection strings and driver error details are not logged.
 
-Only `000_metrics.sql`, `002_encrypted.sql`, `004_auth.sql`, and `005_limits.sql`
-run automatically. `004` bootstraps or upgrades canonical `user`, `session`,
+Only `000_metrics.sql`, `002_encrypted.sql`, `004_auth.sql`, `005_limits.sql`, and
+`006_activity_credit.sql` run automatically. `004` bootstraps or upgrades canonical `user`, `session`,
 `account`, `verification`, and `passkey` tables, then adds server-owned
 onboarding, passkey freshness, and ingestion credentials. Existing main auth
 records use those same canonical tables; no parallel `auth_*` account store is
@@ -157,9 +157,10 @@ for both Workers.
    `apps/api/.env`, and run `pnpm db:migrate`. Timescale uses the bundled CA;
    set `DATABASE_CA_FILE` only to override it with another trusted PEM file.
    The checksummed runner applies `000_metrics.sql`,
-   `002_encrypted.sql`, `004_auth.sql`, and `005_limits.sql` in that order,
+   `002_encrypted.sql`, `004_auth.sql`, `005_limits.sql`, and
+   `006_activity_credit.sql` in that order,
    creating the registry, encrypted sample/key tables, auth/token tables, and
-   rate-limit storage.
+   rate-limit storage, and encrypted activity-credit records.
    It must not create plaintext `health_samples` or `health_daily` on a fresh
    target. Do not run historical `001_init.sql` as a prerequisite. The normal
    runner does not execute destructive legacy cutover. Verify fresh
@@ -267,3 +268,54 @@ removed their temporary schemas/jobs. The desktop runtime's Electron child
 launcher could not run the normal `pnpm test:database` subprocess, so these same
 tests ran through Vitest's API in the current Node process. No application
 tables or records were changed by verification.
+
+## Activity-credit rollout and rollback
+
+Apply the additive checked `006_activity_credit.sql` migration before deploying
+the Worker serving `/score` and `/loans`. It creates regular relational tables
+in the existing Postgres database; it does not change infrastructure, run a
+backfill, or introduce a second database. Retain compatible encryption readers
+and all active/retired key versions. Ensure Hyperdrive query caching is disabled
+so an accounting decision observes current committed reservations.
+
+Deploy metadata-preserving HealthExporter ingestion with the credit reader.
+Old generic metric rows cannot establish a trustworthy daily summary. A valid
+empty-history score is therefore `null` with 250 kcal starter credit; storage
+or decryption failure is a 503 instead. Reprocessing historical encrypted dumps
+requires a separately authorized, source-preserving procedure.
+
+Before production rollout, rehearse these scenarios with synthetic data and
+staging accounts using the generated SDK with `credentials: 'include'`:
+
+- Preflight `POST /loans` from an exact trusted origin with `Content-Type` and
+  `Idempotency-Key`; expect 204 and credentialed CORS. A hostile origin is 403.
+- Call `/score?timeZone=America%2FLos_Angeles` with a session; verify the known
+  or unknown score, full outstanding principal, available credit and policy.
+- Submit `{ "amountKcal": 200, "durationDays": 7, "timeZone": "America/Los_Angeles" }`
+  with a new idempotency key. Expect a committed 201 approval, zero progress,
+  fixed server terms and 200 kcal less available credit.
+- Call `GET /loans` using each account session; verify `{ "loans": [...] }` contains only that owner’s loans, newest first, with fixed terms and full unpaid principal. A new account returns `{ "loans": [] }`.
+- Submit a valid application above remaining credit using a new key. Expect
+  200 with `outcome: "denied"` and unchanged outstanding principal.
+- Replay each key with the original body after score/balance changes. Expect
+  the exact original status, body, loan ID and timestamps, with no extra debt.
+- Change an amount under an existing key; expect 409. Reject malformed bodies
+  with 400 and missing sessions with 401 before business processing.
+- Race two separate 200 kcal applications against 250 kcal. Verify one approval,
+  one denial and exactly one 200 kcal reservation using independent connections.
+- Exercise DST deadlines and key rotation; corrupt a synthetic envelope and
+  confirm 503 without a starter-credit fallback or sensitive error details.
+
+Run `apps/api/test/credit-postgres.test.ts` with an explicit disposable
+`TEST_DATABASE_URL` for independent-connection accounting evidence. It must use
+its own random isolated schema and remove only that schema. Ordinary test runs
+without that variable report skips; embedded PostgreSQL/stub tests do not prove
+lock contention. Do not implicitly load a deployment database for this test.
+
+For rollback, disable or revert the new credit routes using a compatible
+envelope-aware release. Keep the additive tables, encrypted original decisions,
+loan terms, keys and principal reservations intact. Do not drop tables, clear
+retry keys or forgive debt. Re-enabling the compatible service must replay the
+original decisions. No live deployment or staging smoke is implied by local
+tests. Automatic repayment/allocation and deadline processing remain follow-up work; new loans retain full principal until a future
+authoritative full repayment mechanism completes them.

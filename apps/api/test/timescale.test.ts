@@ -29,7 +29,7 @@ describe.runIf(Boolean(process.env.TEST_DATABASE_URL))('representative Timescale
       created = true;
       await sql.query(`SET search_path TO "${schema}", "${extensionNamespace}", public`);
       stage = 'apply-migrations';
-      for (const name of ['000_metrics.sql', '002_encrypted.sql', '004_auth.sql', '005_limits.sql']) {
+      for (const name of ['000_metrics.sql', '002_encrypted.sql', '004_auth.sql', '005_limits.sql', '006_activity_credit.sql']) {
         stage = `apply-${name}`;
         const migration = await readFile(new NodeURL(`../timescale/${name}`, import.meta.url), 'utf8');
         await sql.query('BEGIN');
@@ -115,7 +115,7 @@ describe.runIf(Boolean(process.env.TEST_DATABASE_URL))('representative Timescale
       const counts = await sql.query<{ samples: string; alice: string }>(`SELECT count(*)::text AS samples,
         count(*) FILTER (WHERE owner_id='test-alice')::text AS alice FROM encrypted_health_samples`);
       expect(counts.rows[0]).toEqual({ samples: '3', alice: '2' });
-      console.info(JSON.stringify({ code: 'timescale-integration-verified', timescaleVersion: extension.rows[0].version, migrations: 4, samples: 3, compressedChunks: compressed.rows.length }));
+      console.info(JSON.stringify({ code: 'timescale-integration-verified', timescaleVersion: extension.rows[0].version, migrations: 5, samples: 3, compressedChunks: compressed.rows.length }));
     } catch (error) {
       // Never let pg error objects expose connection details or SQL parameters.
       const code = error && typeof error === 'object' && 'code' in error && typeof error.code === 'string' && /^[0-9A-Z]{5}$/.test(error.code) ? ` (SQLSTATE ${error.code})` : '';

@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { normalizedSampleSchema } from '@burn-rate/api-schema';
 import { mapPayload } from '../src/ingest';
+import { normalizedRingSummarySchema } from '../src/credit/types';
+import { calculateCredit } from '../src/credit/policy';
 import fixture from './fixtures/health-exporter-v1.json';
 
 const dumpKey = 'hook/2026-10-22T18:09:02.961Z-fixture.json';
@@ -60,5 +62,59 @@ describe('mapPayload: health-exporter-v1', () => {
     for (const sample of result.samples) {
       expect(() => normalizedSampleSchema.parse(sample)).not.toThrow();
     }
+  });
+
+  it('retains one indivisible summary revision alongside metric samples', () => {
+    expect(result.ringSummaries).toHaveLength(1);
+    expect(normalizedRingSummarySchema.parse(result.ringSummaries[0])).toEqual({
+      sourceIdentity: 'com.apple.Fitness', sourceRecordId: 'HKActivitySummaryTypeIdentifier:2026-10-16',
+      localDate: '2026-10-16', timeZone: 'America/Los_Angeles',
+      startsAt: '2026-10-16T07:00:00Z', endsAt: '2026-10-17T07:00:00Z', revisionAt: '2026-10-22T18:08:50Z',
+      moveMode: 'energy', paused: false,
+      move: { actual: 1040.1363046016702, goal: 1100, unit: 'kcal' },
+      exercise: { actual: 94, goal: 90, unit: 'min' },
+      stand: { actual: 11, goal: 14, unit: 'count' }
+    });
+    expect(calculateCredit({ ringSummaries: result.ringSummaries, loans: [] }, 'America/Los_Angeles', '2026-10-22T21:00:00Z').credit.historyDays).toBe(1);
+  });
+
+  it('retains incomplete corrections without inventing goals, metadata, or activity', () => {
+    const summarySample = structuredClone(fixture.samples[4]);
+    const incomplete = mapPayload({ schemaVersion: 'health-exporter.v1', samples: [{
+      ...summarySample, activitySummary: { date: '2026-10-16', activityMoveMode: 1, activeEnergyBurned: 0 }
+    }] }, dumpKey, 'fixture-owner').ringSummaries[0];
+    expect(incomplete).toMatchObject({
+      revisionAt: null, timeZone: null, paused: null, moveMode: 'energy',
+      move: { actual: 0, goal: null, unit: null }, exercise: { actual: null, goal: null, unit: null }
+    });
+    expect(normalizedRingSummarySchema.safeParse(incomplete).success).toBe(true);
+  });
+
+  it('preserves missing mode as unknown instead of inferring it from energy samples', () => {
+    const payload = structuredClone(fixture);
+    delete (payload.samples[4].activitySummary as Record<string, unknown>).activityMoveMode;
+    const normalized = mapPayload(payload, dumpKey, 'fixture-owner');
+    expect(normalized.ringSummaries[0]).toMatchObject({ moveMode: null, move: { actual: null, goal: null, unit: null } });
+    expect(normalized.samples.some((sample) => sample.metric === 'active_energy_burned')).toBe(true);
+  });
+
+  it('supports declared Move-time summaries and source-name fallback identities', () => {
+    const payload = structuredClone(fixture);
+    const sample = payload.samples[4];
+    sample.source = { name: 'Apple\u00a0Fitness' } as typeof sample.source;
+    Object.assign(sample.activitySummary!, { activityMoveMode: 2, appleMoveTime: 20, appleMoveTimeGoal: 30 });
+    expect(mapPayload(payload, dumpKey, 'fixture-owner').ringSummaries[0]).toMatchObject({
+      sourceIdentity: 'com.apple.Fitness', moveMode: 'time', move: { actual: 20, goal: 30, unit: 'min' }
+    });
+  });
+
+  it('quarantines malformed revision timestamps without promoting receipt time', () => {
+    const payload = { ...fixture, createdAt: '2026-02-30T18:08:50Z' };
+    expect(mapPayload(payload, dumpKey, 'fixture-owner').ringSummaries[0].revisionAt).toBeNull();
+  });
+
+  it('does not synthesize score summaries from metrics-v1 or unknown formats', () => {
+    expect(mapPayload({ data: { metrics: [] } }, dumpKey, 'fixture-owner').ringSummaries).toEqual([]);
+    expect(mapPayload({}, dumpKey, 'fixture-owner').ringSummaries).toEqual([]);
   });
 });

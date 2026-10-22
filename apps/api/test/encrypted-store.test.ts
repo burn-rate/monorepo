@@ -32,6 +32,9 @@ describe('encrypted persistence on PostgreSQL (PGlite)', () => {
       .replace(/SELECT create_hypertable[\s\S]*?;/g, '')
       .replace(/ALTER TABLE encrypted_health_samples SET \([\s\S]*?\);/g, '')
       .replace(/CALL add_columnstore_policy[\s\S]*?;/g, ''));
+    for (const name of ['004_auth.sql', '006_activity_credit.sql']) {
+      await database.exec(await readFile(new NodeURL(`../timescale/${name}`, import.meta.url), 'utf8'));
+    }
     sql = { query: async (text: string, values?: unknown[]) => {
       if (text.includes('pg_advisory_xact_lock')) return { rows: [], rowCount: 0 };
       return database.query(text, values);
@@ -87,6 +90,33 @@ describe('encrypted persistence on PostgreSQL (PGlite)', () => {
     expect(retained.every(key => key.kek_id === 'kek-2')).toBe(true);
     await storeEncryptedSamples(sql, restoredConfig, 'alice', [{ ...observation(0, 82), sourceName: observation().sourceName.replace(' ', '\u00a0') }]);
     expect(Number((await sql.query('SELECT count(*) FROM encrypted_health_samples')).rows[0].count)).toBe(1);
+  });
+
+  it('authenticates each credit record family and retains old keys across rotation', async () => {
+    const keys = await createUserKeyring(sql, config, 'alice');
+    const kinds = ['ring-summary', 'loan', 'loan-decision'] as const;
+    const records = await Promise.all(kinds.map(async kind => {
+      const context = { ownerId: 'alice', kind, id: `opaque-${kind}`, metadata: ['bound-index'] };
+      const envelope = await keys.encrypt(context, { sensitive: 'private credit terms', principal: '0.1' });
+      expect(JSON.stringify(envelope)).not.toContain('private credit terms');
+      for (const changed of [
+        { ...context, ownerId: 'bob' }, { ...context, id: 'different' },
+        { ...context, kind: 'sample' as const }, { ...context, metadata: ['changed-index'] }
+      ]) await expect(keys.decrypt(changed, envelope)).rejects.toBeInstanceOf(CryptoFailure);
+      return { context, envelope };
+    }));
+    const domains = ['ring-summary-identity', 'ring-summary-day', 'ring-summary-content', 'loan-idempotency', 'loan-request'] as const;
+    const digests = await Promise.all(domains.map(domain => keys.digest(domain, ['same-input'])));
+    expect(new Set(digests).size).toBe(domains.length);
+    const bob = await createUserKeyring(sql, config, 'bob');
+    expect(await bob.digest('loan-idempotency', ['same-input'])).not.toBe(digests[3]);
+    await rotateDataKey(sql, config, 'alice');
+    const restored = await createUserKeyring(sql, config, 'alice');
+    for (const { context, envelope } of records) {
+      expect(await restored.decrypt(context, envelope)).toEqual({ sensitive: 'private credit terms', principal: '0.1' });
+      expect((await restored.encrypt(context, { principal: '0.1' })).keyId).not.toBe(envelope.keyId);
+    }
+    expect(await restored.digest('loan-idempotency', ['same-input'])).toBe(digests[3]);
   });
 
   it('converges after a failed later batch and isolates two owners', async () => {

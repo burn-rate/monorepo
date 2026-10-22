@@ -26,6 +26,73 @@ const { data, error, response } = await listHealthSamples({
 });
 ```
 
+The source API also exposes `getScore`, `listLoans` and `createLoan` at the root paths
+`/score` and `/loans`. Deploy the checked migrations and Worker before using
+these operations in an environment. This example works with the client above:
+
+```ts
+import { getScore, listLoans, createLoan } from '@burn-rate/sdk';
+
+const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+const score = await getScore({ client, query: { timeZone } });
+if (score.error) throw new Error(score.error.error.message);
+// score.data?.score is number | null. Show unknown history separately from 300.
+console.log(score.data?.score, score.data?.availableKcal);
+
+const history = await listLoans({ client });
+if (history.error) throw new Error(history.error.error.message);
+console.log(history.data?.loans); // [] when no loans are retained.
+
+// Persist the key and body with the UI's pending application before sending.
+// Reuse both after a network failure; create a fresh key for a new application.
+const applicationKey = crypto.randomUUID();
+const application = { amountKcal: 200, durationDays: 7, timeZone };
+const decision = await createLoan({
+  client,
+  headers: { 'idempotency-key': applicationKey },
+  body: application,
+});
+if (decision.error) throw new Error(decision.error.error.message);
+if (decision.data?.outcome === 'denied') {
+  console.log(decision.data.message, decision.data.credit.availableKcal);
+} else if (decision.data?.outcome === 'approved') {
+  console.log(decision.data.loan.repaymentTargetKcal, decision.data.loan.dueAt);
+}
+```
+
+`getScore` requires an IANA zone and returns the flat credit snapshot. Known
+50% consistency gives score 575, limit 1125 and multiplier 1.275. No usable
+history gives `score: null`, limit 250 and multiplier 1.5. The complete known,
+unknown, approval, denial and error JSON examples are in the
+[activity credit contract](../../docs/activity-credit-contract.md).
+
+`listLoans` sends `GET /loans` with no required query or idempotency header. It
+returns `{ loans }` containing every retained session-owned loan, newest first
+by creation time then ID descending, using the approval loan shape.
+
+`createLoan` accepts a positive finite `amountKcal`, integer `durationDays` from
+1 through 30, and IANA `timeZone`. No owner, treat or client-selected terms belong
+in the body. Its `Idempotency-Key` header is required; the generated options use
+the lowercase spelling shown above, which HTTP treats case-insensitively.
+Approval returns `201` with `{ outcome: 'approved', loan, credit }`; a new
+200-kcal loan at 1.275 has target 255 Move kcal, progress zero and full 200-kcal
+principal outstanding. Insufficient credit returns `200` with
+`{ outcome: 'denied', loan: null, reason: 'insufficient-credit', message, credit }`.
+Inspect `outcome` rather than treating every successful status as approval.
+
+A same-owner key with the same validated body replays the original status,
+loan, timestamps and credit snapshot, including a denial after credit improves.
+A changed body under an existing key returns `409`. A new intended application
+needs a new key. Display server-returned terms, balances and deadlines: accounting
+uses exact decimals, and deadlines use local calendar days across DST. Do not
+recalculate them from the displayed rounded score or JavaScript arithmetic.
+
+Full unpaid principal remains reserved until authoritative full repayment;
+partial progress releases none, and available credit can be negative after a
+limit reduction. Automatic repayment, activity allocation, overdue processing
+and completion mutations are deferred. Imports and elapsed time do not fabricate
+progress or release the reservation.
+
 The browser must use the configured trusted dashboard origin. Protected application
 operations require the Better Auth session cookie. Configure API origin, RP ID,
 cookie topology, and Better Auth trusted origins together before registering
@@ -59,7 +126,7 @@ or dump locations.
 
 Application errors have `{ error: { code, message, requestId } }`. Handle 400
 for invalid parameters/cursors, 401 for missing/expired sessions, 403 for origin
-or verification requirements, 404 for missing credentials, 429 for throttling,
+or verification requirements, 404 for missing credentials, 409 for a changed idempotency payload, 429 for throttling,
 and 503 for retryable service failure. Better Auth has its own error contract.
 Token creation returns `{ token, secret }`; the secret appears only once.
 Credential lists contain lifecycle metadata and no secret. Revocation is

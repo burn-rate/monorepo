@@ -21,6 +21,7 @@
     "@burn-rate/api-schema": "workspace:*",
     "@burn-rate/db": "workspace:*",
     "@hono/zod-openapi": "1.6.3",
+    "@js-temporal/polyfill": "^0.5.1",
     "better-auth": "1.7.12",
     "hono": "4.13.13",
     "kysely": "0.29.7",

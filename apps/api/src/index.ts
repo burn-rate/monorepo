@@ -9,6 +9,8 @@ import { authenticateIngestionToken, createIngestionToken, listIngestionTokens, 
 import { CryptoFailure, encryptDump, type CryptoConfig } from './crypto';
 import { InvalidSampleQuery, listEncryptedSamples, storeEncryptedSamples } from './encrypted-store';
 import { mapPayload } from './ingest';
+import { getCreditScore, createCreditLoan, listCreditLoans } from './credit/service';
+import { storeEncryptedRingSummaries } from './credit/store';
 import { enforceRateLimit, positiveLimit, readBoundedBody, RequestFailure } from './limits';
 import { registerApiRoutes, type ApiEnvironment, type ApiRequest } from './routes';
 
@@ -22,6 +24,7 @@ export interface Env extends AuthEnvironment, CryptoConfig {
 }
 
 interface RequestState { sql?: Promise<Sql>; session?: AuthSession; allowedOrigin?: string }
+const isBrowserApiPath = (path: string) => path.startsWith('/api/') || path === '/timeseries/health' || path === '/score' || path === '/loans';
 
 /** Services and connections are constructed lazily, once per request, and always cleaned up. */
 export function createApp(connect: (env: Env) => Promise<Sql> = getSql) {
@@ -49,7 +52,7 @@ export function createApp(connect: (env: Env) => Promise<Sql> = getSql) {
       c.header('X-Request-Id', c.get('requestId'));
       const path = new URL(c.req.url).pathname;
       if (path !== '/health' && path !== '/openapi.json') c.header('Cache-Control', 'no-store');
-      if (path.startsWith('/api/') || path === '/timeseries/health') {
+      if (isBrowserApiPath(path)) {
         c.header('Vary', 'Origin');
         if (state.allowedOrigin) {
           c.header('Access-Control-Allow-Origin', state.allowedOrigin);
@@ -67,7 +70,7 @@ export function createApp(connect: (env: Env) => Promise<Sql> = getSql) {
   app.use('*', async (c, next) => {
     const path = new URL(c.req.url).pathname;
     if (path !== '/health' && path !== '/openapi.json') c.header('Cache-Control', 'no-store');
-    const isBrowserApi = path.startsWith('/api/') || path === '/timeseries/health';
+    const isBrowserApi = isBrowserApiPath(path);
     if (isBrowserApi) {
       const config = readAuthConfig(c.env);
       const origin = c.req.header('Origin');
@@ -80,12 +83,13 @@ export function createApp(connect: (env: Env) => Promise<Sql> = getSql) {
       if (c.req.method === 'OPTIONS') {
         if (!origin || !config.trustedOrigins.includes(origin)) throw new AuthError(403, 'untrusted-origin', 'The request origin is not allowed');
         const requestedMethod = c.req.header('Access-Control-Request-Method');
+        const allowedMethods = path === '/score' ? ['GET'] : path === '/loans' ? ['GET', 'POST'] : ['GET', 'POST', 'DELETE'];
         const requestedHeaders = (c.req.header('Access-Control-Request-Headers') ?? '').split(',').map(h => h.trim().toLowerCase()).filter(Boolean);
-        if (!requestedMethod || !['GET', 'POST', 'DELETE'].includes(requestedMethod) || requestedHeaders.some(h => h !== 'content-type')) {
+        if (!requestedMethod || !allowedMethods.includes(requestedMethod) || requestedHeaders.some(h => h !== 'content-type' && !(path === '/loans' && requestedMethod === 'POST' && h === 'idempotency-key'))) {
           throw new AuthError(403, 'untrusted-preflight', 'The requested cross-origin operation is not allowed');
         }
-        c.header('Access-Control-Allow-Methods', 'GET, POST, DELETE');
-        c.header('Access-Control-Allow-Headers', 'Content-Type');
+        c.header('Access-Control-Allow-Methods', allowedMethods.join(', '));
+        c.header('Access-Control-Allow-Headers', path === '/loans' && requestedMethod === 'POST' ? 'Content-Type, Idempotency-Key' : 'Content-Type');
         return c.body(null, 204);
       }
       assertTrustedMutation(c.req.raw, config);
@@ -144,6 +148,16 @@ export function createApp(connect: (env: Env) => Promise<Sql> = getSql) {
       }
       return Response.json({ revoked: true });
     },
+    async getScore(ctx, query) {
+      return Response.json(await getCreditScore(await sqlFor(ctx.request, ctx.env), ctx.env, sessionFor(ctx).user.id, query.timeZone));
+    },
+    async listLoans(ctx) {
+      return Response.json(await listCreditLoans(await sqlFor(ctx.request, ctx.env), ctx.env, sessionFor(ctx).user.id));
+    },
+    async createLoan(ctx, input, idempotencyKey) {
+      const decision = await createCreditLoan(await sqlFor(ctx.request, ctx.env), ctx.env, sessionFor(ctx).user.id, input, idempotencyKey);
+      return Response.json(decision.body, { status: decision.status });
+    },
     async ingest(ctx) {
       // Invalid credentials are rejected before reading or retaining the body.
       const authorization = ctx.request.headers.get('Authorization');
@@ -175,6 +189,7 @@ export function createApp(connect: (env: Env) => Promise<Sql> = getSql) {
         retained = true;
         ingest = mapPayload(body, dumpKey, ownerId);
         const stored = await storeEncryptedSamples(sql, ctx.env, ownerId, ingest.samples);
+        await storeEncryptedRingSummaries(sql, ctx.env, ownerId, ingest.ringSummaries);
         const counters = { format: ingest.format, received: ingest.received, mapped: ingest.mapped, dropped: ingest.dropped,
           droppedBy: ingest.dropped ? { unsupported: ingest.dropped } : {} };
         console.info(JSON.stringify({ requestId: ctx.requestId, code: 'upload-accepted', received: counters.received, stored, dropped: counters.dropped }));

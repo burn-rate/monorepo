@@ -4,8 +4,9 @@ import {
   currentUserSchema, healthResponseSchema, healthSamplesQuerySchema,
   healthSamplesResponseSchema, hookStorageFailureSchema, hookSuccessSchema,
   ingestionTokensResponseSchema, metricsResponseSchema, revokeIngestionTokenResponseSchema,
-  timeseriesHealthResponseSchema,
-  type CreateIngestionTokenInput, type HealthSamplesQuery
+  timeseriesHealthResponseSchema, getScoreQuerySchema, createLoanInputSchema, loanHeadersSchema,
+  creditSnapshotSchema, loansResponseSchema, approvedLoanDecisionSchema, deniedLoanDecisionSchema,
+  type CreateIngestionTokenInput, type HealthSamplesQuery, type GetScoreQuery, type CreateLoanInput
 } from '@burn-rate/api-schema';
 import type { Context } from 'hono';
 
@@ -21,6 +22,9 @@ export interface ApiServices<B extends object> {
   createIngestionToken(context: ApiRequest<B>, input: CreateIngestionTokenInput): Promise<Response>;
   listIngestionTokens(context: ApiRequest<B>): Promise<Response>;
   revokeIngestionToken(context: ApiRequest<B>, id: string): Promise<Response>;
+  getScore(context: ApiRequest<B>, query: GetScoreQuery): Promise<Response>;
+  listLoans(context: ApiRequest<B>): Promise<Response>;
+  createLoan(context: ApiRequest<B>, input: CreateLoanInput, idempotencyKey: string): Promise<Response>;
   ingest(context: ApiRequest<B>): Promise<Response>;
 }
 
@@ -65,6 +69,19 @@ export const applicationRoutes = {
     security: session, tags: ['ingestion credentials'], description: 'Revocation is idempotent for an already revoked credential owned by the session. Foreign IDs are indistinguishable from missing IDs.',
     request: { params: z.object({ id: z.string().min(1).max(256).openapi({ param: { name: 'id', in: 'path' } }) }) },
     responses: { 200: json(revokeIngestionTokenResponseSchema.openapi('RevokedIngestionToken'), 'Credential revoked.'), 404: json(failure, 'Credential not found.'), ...errors } }),
+  getScore: createRoute({ method: 'get', path: '/score', operationId: 'getScore', security: session,
+    tags: ['activity credit'], description: 'Ring-derived credit for the last seven completed local dates. Unknown history returns a null score. Full unpaid principal remains reserved; available credit may be negative.',
+    request: { query: getScoreQuerySchema },
+    responses: { 200: json(creditSnapshotSchema.openapi('CreditSnapshot'), 'Current owner credit snapshot.'), ...errors } }),
+  listLoans: createRoute({ method: 'get', path: '/loans', operationId: 'listLoans', security: session,
+    tags: ['activity credit'], description: 'All retained loans owned by the session, newest first by creation timestamp then ID. No timezone query or pagination is required.',
+    responses: { 200: json(loansResponseSchema.openapi('LoansResponse'), 'Owner loans, or an empty loans array.'), ...errors } }),
+  createLoan: createRoute({ method: 'post', path: '/loans', operationId: 'createLoan', security: session,
+    tags: ['activity credit'], description: 'Apply for raw calorie principal with fixed Move-kcal repayment terms. Same-owner retries with the same key and validated body replay the original status and body, including denials. Automatic repayment is deferred.',
+    request: { headers: loanHeadersSchema, body: { required: true, content: { 'application/json': { schema: createLoanInputSchema.openapi('CreateLoanInput') } } } },
+    responses: { 200: json(deniedLoanDecisionSchema.openapi('DeniedLoanDecision'), 'Durable insufficient-credit business denial; no loan is created.'),
+      201: json(approvedLoanDecisionSchema.openapi('ApprovedLoanDecision'), 'Approved loan and post-reservation credit.'),
+      409: json(failure, 'Idempotency key was already used with different validated input.'), ...errors } }),
   hook: createRoute({ method: 'post', path: '/hook', operationId: 'uploadHealthPayload', security: bearer,
     tags: ['exporter'], description: 'Exporter ingestion only. A browser session does not authorize upload. Both supported exporter formats and unknown/non-JSON captures are encrypted before retention.',
     request: { body: { required: true, content: {
@@ -96,6 +113,9 @@ export function registerApiRoutes<B extends object>(app: OpenAPIHono<ApiEnvironm
   app.openapi(applicationRoutes.createIngestionToken, (c) => contractResponse(applicationRoutes.createIngestionToken, services.createIngestionToken(contextFor(c), c.req.valid('json'))), validationError);
   app.openapi(applicationRoutes.listIngestionTokens, (c) => contractResponse(applicationRoutes.listIngestionTokens, services.listIngestionTokens(contextFor(c))));
   app.openapi(applicationRoutes.revokeIngestionToken, (c) => contractResponse(applicationRoutes.revokeIngestionToken, services.revokeIngestionToken(contextFor(c), c.req.valid('param').id)), validationError);
+  app.openapi(applicationRoutes.getScore, (c) => contractResponse(applicationRoutes.getScore, services.getScore(contextFor(c), c.req.valid('query'))), validationError);
+  app.openapi(applicationRoutes.listLoans, (c) => contractResponse(applicationRoutes.listLoans, services.listLoans(contextFor(c))));
+  app.openapi(applicationRoutes.createLoan, (c) => contractResponse(applicationRoutes.createLoan, services.createLoan(contextFor(c), c.req.valid('json'), c.req.valid('header')['idempotency-key'])), validationError);
   // Register the body contract without a validator: ingestion must authenticate
   // and enforce its byte limit before parsing or retaining any request body.
   app.openAPIRegistry.registerPath(applicationRoutes.hook);
@@ -139,7 +159,7 @@ export function createOfflineContractApp() {
   registerApiRoutes(app, {
     timeseriesHealth: unavailable, getCurrentUser: unavailable, listMetrics: unavailable,
     listHealthSamples: unavailable, createIngestionToken: unavailable,
-    listIngestionTokens: unavailable, revokeIngestionToken: unavailable, ingest: unavailable
+    listIngestionTokens: unavailable, revokeIngestionToken: unavailable, getScore: unavailable, listLoans: unavailable, createLoan: unavailable, ingest: unavailable
   });
   return app;
 }

@@ -4,11 +4,12 @@ import { createApp, type Env } from '../src/index';
 import type { Sql } from '../src/db';
 
 const mocks = vi.hoisted(() => ({
-  session: vi.fn(), handleAuth: vi.fn(), authenticate: vi.fn(), encrypt: vi.fn(), store: vi.fn(), read: vi.fn()
+  session: vi.fn(), handleAuth: vi.fn(), authenticate: vi.fn(), encrypt: vi.fn(), store: vi.fn(), read: vi.fn(), storeSummaries: vi.fn()
 }));
 vi.mock('../src/auth', () => ({ getAuthSession: mocks.session, handleAuthRequest: mocks.handleAuth }));
 vi.mock('../src/tokens', () => ({ authenticateIngestionToken: mocks.authenticate, createIngestionToken: vi.fn(), listIngestionTokens: vi.fn(), revokeIngestionToken: vi.fn() }));
 vi.mock('../src/crypto', async (original) => ({ ...await original<object>(), encryptDump: mocks.encrypt }));
+vi.mock('../src/credit/store', () => ({ storeEncryptedRingSummaries: mocks.storeSummaries }));
 vi.mock('../src/encrypted-store', async (original) => ({ ...await original<object>(), storeEncryptedSamples: mocks.store, listEncryptedSamples: mocks.read }));
 
 const env = {
@@ -37,6 +38,7 @@ beforeEach(() => {
   mocks.authenticate.mockResolvedValue('owner-1');
   mocks.encrypt.mockResolvedValue({ version: 1, keyId: 'key', iv: 'nonce', ciphertext: 'protected' });
   mocks.store.mockResolvedValue(2);
+  mocks.storeSummaries.mockResolvedValue(1);
 });
 afterEach(() => vi.restoreAllMocks());
 

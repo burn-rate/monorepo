@@ -16,11 +16,15 @@ export interface Envelope {
 
 export interface RecordContext {
   ownerId: string;
-  kind: 'sample' | 'dump';
+  kind: 'sample' | 'dump' | 'ring-summary' | 'loan' | 'loan-decision';
   id: string;
   /** Canonically ordered query metadata, authenticated but intentionally readable. */
   metadata?: readonly string[];
 }
+
+/** Separate index domains prevent identities from crossing record families. */
+export type DigestDomain = 'source' | 'sample' | 'cursor' | 'ring-summary-identity' |
+  'ring-summary-day' | 'ring-summary-content' | 'loan-idempotency' | 'loan-request';
 
 interface KeyRow {
   owner_id: string;
@@ -163,7 +167,7 @@ export class UserKeyring {
     } catch { throw new CryptoFailure(); }
   }
 
-  async digest(domain: 'source' | 'sample' | 'cursor', values: readonly string[]): Promise<string> {
+  async digest(domain: DigestDomain, values: readonly string[]): Promise<string> {
     return base64url(new Uint8Array(await crypto.subtle.sign('HMAC', this.indexKey,
       canonical(['burn-rate', this.config.ENCRYPTION_ENVIRONMENT, this.ownerId, domain, ...values]))));
   }
@@ -243,9 +247,13 @@ export async function rewrapUserKeys(sql: Sql, config: CryptoConfig, ownerId: st
 }
 
 export async function retainedKeyInventory(sql: Sql) {
-  return (await sql.query<{ owner_id: string; key_id: string; purpose: string; state: string; kek_id: string; live_samples: string }>(`
+  return (await sql.query<{ owner_id: string; key_id: string; purpose: string; state: string; kek_id: string;
+    live_samples: string; live_ring_summaries: string; live_loans: string; live_loan_decisions: string }>(`
     SELECT k.owner_id, k.key_id, k.purpose, k.state, k.wrapped_key->>'keyId' AS kek_id,
-      (SELECT count(*) FROM encrypted_health_samples s WHERE s.owner_id = k.owner_id AND s.envelope->>'keyId' = k.key_id)::text AS live_samples
+      (SELECT count(*) FROM encrypted_health_samples s WHERE s.owner_id = k.owner_id AND s.envelope->>'keyId' = k.key_id)::text AS live_samples,
+      (SELECT count(*) FROM activity_ring_summaries s WHERE s.owner_id = k.owner_id AND s.envelope->>'keyId' = k.key_id)::text AS live_ring_summaries,
+      (SELECT count(*) FROM calorie_loans l WHERE l.owner_id = k.owner_id AND l.envelope->>'keyId' = k.key_id)::text AS live_loans,
+      (SELECT count(*) FROM calorie_loan_decisions d WHERE d.owner_id = k.owner_id AND d.envelope->>'keyId' = k.key_id)::text AS live_loan_decisions
     FROM health_user_keys k ORDER BY k.owner_id, k.purpose, k.created_at`)).rows;
 }
 
