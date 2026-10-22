@@ -1,4 +1,4 @@
 # Local dev connection to the TimescaleDB instance. `wrangler dev` uses this
 # for the TIMESERIES_DB Hyperdrive binding instead of the cloud config.
-# Example: postgresql://tsdbadmin:password@abc123.tsdb.cloud.timescale.com:34344/tsdb?sslmode=require
-WRANGLER_HYPERDRIVE_LOCAL_CONNECTION_STRING_TIMESERIES_DB=""
+# Example: postgresql://postgres:password@localhost:5432/burn_rate
+CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_TIMESERIES_DB=""

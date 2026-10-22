@@ -9,6 +9,7 @@ apps/
   marketing/    Static Astro marketing site
 packages/
   api-schema/   Shared Zod schemas and inferred TypeScript API types
+  design-tokens/ Simpsons donut theme: CSS custom properties and TS tokens
 ```
 
 ## Activity credit planning
@@ -79,7 +80,7 @@ update the `TIMESERIES_DB` binding's `id` with the ID returned by:
 pnpm --filter @burn-rate/api exec wrangler hyperdrive create burn-rate-timeseries --connection-string="$TIMESERIES_DB_URL"
 ```
 
-For local development, copy `.dev.vars.example` to `.dev.vars` and set `WRANGLER_HYPERDRIVE_LOCAL_CONNECTION_STRING_TIMESERIES_DB` to the origin connection string; `wrangler dev` then connects directly, no Hyperdrive needed. Keep credentials in `.dev.vars` / Worker secrets, never in frontend environment variables.
+For local development, copy `.dev.vars.example` to `.dev.vars` and set `CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_TIMESERIES_DB` to the origin connection string; `wrangler dev` then connects directly, no Hyperdrive needed. Keep credentials in `.dev.vars` / Worker secrets, never in frontend environment variables.
 
 ## Ingest pipeline
 

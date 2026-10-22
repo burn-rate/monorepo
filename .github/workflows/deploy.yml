@@ -25,6 +25,12 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Typecheck, test, build
+        run: |
+          pnpm check
+          pnpm test
+          pnpm build
+
       - name: Guard against stale deploys
         run: |
           LATEST=$(git ls-remote origin refs/heads/main | cut -f1)
@@ -38,9 +44,11 @@ jobs:
         run: pnpm exec wrangler d1 migrations apply burn-rate --remote
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID || 'a855feec1f62b3f8eb8228967ea169bf' }}
 
       - name: Deploy Worker
         working-directory: apps/api
         run: pnpm exec wrangler deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID || 'a855feec1f62b3f8eb8228967ea169bf' }}

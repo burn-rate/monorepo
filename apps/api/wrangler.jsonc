@@ -2,6 +2,7 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "burn-rate-api",
   "main": "src/index.ts",
+  "account_id": "a855feec1f62b3f8eb8228967ea169bf",
   "compatibility_date": "2026-10-21",
   "compatibility_flags": ["nodejs_compat"],
   "observability": {
