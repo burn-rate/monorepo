@@ -1,10 +1,12 @@
 import type { IngestStats, NormalizedSample } from '@burn-rate/api-schema';
+import type { NormalizedRingSummary } from '../credit/types';
 import { detectFormat } from './detect';
 import { mapHealthExporter, type HealthExporterPayload, type MapResult } from './health-exporter';
 import { mapMetricsExport, type MetricsExportPayload } from './metrics-export';
 
 export interface IngestResult extends IngestStats {
   samples: NormalizedSample[];
+  ringSummaries: NormalizedRingSummary[];
 }
 
 /**
@@ -32,7 +34,7 @@ export function mapPayload(body: unknown, dumpKey: string, userId: string): Inge
       break;
     }
     case 'unknown':
-      return { format, received: 0, mapped: 0, dropped: 0, droppedBy: {}, samples: [] };
+      return { format, received: 0, mapped: 0, dropped: 0, droppedBy: {}, samples: [], ringSummaries: [] };
   }
 
   return {
@@ -41,6 +43,7 @@ export function mapPayload(body: unknown, dumpKey: string, userId: string): Inge
     mapped: result.samples.length,
     dropped: result.drops.total,
     droppedBy: result.drops.toRecord(),
-    samples: result.samples
+    samples: result.samples,
+    ringSummaries: result.ringSummaries ?? []
   };
 }

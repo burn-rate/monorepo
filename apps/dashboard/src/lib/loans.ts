@@ -1,16 +1,15 @@
 import {
-  loanRequestResponseSchema,
-  loansViewResponseSchema,
-  type LoanRequestInput,
-  type LoanRequestResponse,
+  loanDecisionSchema,
+  loansResponseSchema,
+  type CreateLoanInput,
+  type LoanDecision,
   type LoanTermUnit,
   type LoanTreatId,
   type LoanView
 } from '@burn-rate/api-schema';
 
 /**
- * GET /loans is not implemented server-side yet; until then this surfaces as
- * a "not available yet" state rather than an error.
+ * Unavailable API deployments surface as a separate history state.
  */
 export class LoansUnavailableError extends Error {}
 
@@ -22,17 +21,18 @@ export const LOANS_WINDOW_DAYS = 90;
  * outside SvelteKit (vitest runs these helpers without the dev server).
  */
 export async function requestLoan(
-  input: LoanRequestInput,
-  baseUrl: string
-): Promise<LoanRequestResponse> {
-  const response = await fetch(`${baseUrl}/loan`, {
+  input: CreateLoanInput,
+  baseUrl: string,
+  idempotencyKey: string
+): Promise<LoanDecision> {
+  const response = await fetch(`${baseUrl}/loans`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', 'Idempotency-Key': idempotencyKey },
     credentials: 'include',
     body: JSON.stringify(input)
   });
   if (!response.ok) throw new Error(`Loan request failed (${response.status})`);
-  return loanRequestResponseSchema.parse(await response.json());
+  return loanDecisionSchema.parse(await response.json());
 }
 
 /** Fetch current and past loans. Throws LoansUnavailableError on 404/501. */
@@ -40,13 +40,12 @@ export async function fetchLoans(baseUrl: string): Promise<LoanView[]> {
   const response = await fetch(`${baseUrl}/loans`, { credentials: 'include' });
   if (response.status === 404 || response.status === 501) throw new LoansUnavailableError('Loan history is not implemented yet');
   if (!response.ok) throw new Error(`Loan history failed (${response.status})`);
-  return loansViewResponseSchema.parse(await response.json()).loans;
+  return loansResponseSchema.parse(await response.json()).loans;
 }
 
 /**
  * Keep active loans at any age plus settled loans whose term ended within
- * the rolling window. The backend is expected to filter the same way; this
- * keeps the view honest regardless.
+ * the rolling window. The API returns all retained loans; the dashboard applies this display window.
  */
 export function filterRecentLoans(
   loans: LoanView[],
@@ -87,8 +86,10 @@ export const TREAT_ART: Record<LoanTreatId, { emoji: string; image: string; blur
   beer: { emoji: '🍺', image: '/loans/beer.png', blurb: 'Best chased with a brisk walk.' }
 };
 
+export const TERM_DAYS: Record<LoanTermUnit, number> = { days: 1, weeks: 7, months: 30 };
+
 export const TERM_LABELS: Record<LoanTermUnit, string> = {
   days: '1 day',
   weeks: '1 week',
-  months: '1 month'
+  months: '30 days'
 };

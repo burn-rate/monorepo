@@ -7,7 +7,7 @@ import { expect, it } from 'vitest';
 it('initializes an empty database without plaintext health storage and repeats cleanly', async () => {
   const database = new PGlite();
   try {
-    const names = ['000_metrics.sql', '002_encrypted.sql', '004_auth.sql', '005_limits.sql'];
+    const names = ['000_metrics.sql', '002_encrypted.sql', '004_auth.sql', '005_limits.sql', '006_activity_credit.sql'];
     const migrations: string[] = [];
     for (const name of names) {
       const body = await readFile(new NodeURL(`../timescale/${name}`, import.meta.url), 'utf8');
@@ -32,7 +32,9 @@ it('initializes an empty database without plaintext health storage and repeats c
       else firstTables = tables;
       expect(tables).toEqual(expect.arrayContaining([
         { tablename: 'encrypted_health_samples' }, { tablename: 'health_user_keys' },
-        { tablename: 'user' }, { tablename: 'session' }, { tablename: 'ingestion_tokens' }
+        { tablename: 'user' }, { tablename: 'session' }, { tablename: 'ingestion_tokens' },
+        { tablename: 'calorie_credit_owners' }, { tablename: 'activity_ring_summaries' },
+        { tablename: 'calorie_loans' }, { tablename: 'calorie_loan_decisions' }
       ]));
       expect((await database.query('SELECT count(*)::text AS count FROM encrypted_health_samples')).rows[0]).toEqual({ count: '0' });
       expect((await database.query('SELECT count(*)::text AS count FROM health_migration_state')).rows[0]).toEqual({ count: '1' });

@@ -3,15 +3,16 @@
   import {
     LOAN_TERM_OPTIONS,
     LOAN_TREATS,
-    type LoanRequestResponse,
+    type Loan,
+    type CreateLoanInput,
     type LoanTermUnit,
     type LoanTreatId
   } from '@burn-rate/api-schema';
-  import { TERM_LABELS, TREAT_ART, requestLoan } from '#lib/loans.ts';
+  import { TERM_DAYS, TERM_LABELS, TREAT_ART, requestLoan } from '#lib/loans.ts';
 
   interface Props {
     treatId: LoanTreatId;
-    onRequested?: (loan: LoanRequestResponse) => void;
+    onRequested?: (loan: Loan) => void;
   }
 
   let { treatId, onRequested }: Props = $props();
@@ -21,16 +22,29 @@
 
   let selectedUnit = $state<LoanTermUnit>('days');
   let requesting = $state(false);
-  let loan = $state<LoanRequestResponse | null>(null);
+  let loan = $state<Loan | null>(null);
   let error = $state<string | null>(null);
   let artFailed = $state(false);
+  let pending: { input: CreateLoanInput; key: string } | null = null;
 
   async function request(): Promise<void> {
     requesting = true;
     error = null;
+    loan = null;
     try {
-      loan = await requestLoan({ treatId, termUnit: selectedUnit }, API_URL);
-      onRequested?.(loan);
+      const input = {
+        amountKcal: treat.caloriesKcal,
+        durationDays: TERM_DAYS[selectedUnit],
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+      };
+      if (!pending || JSON.stringify(pending.input) !== JSON.stringify(input)) {
+        pending = { input, key: crypto.randomUUID() };
+      }
+      const decision = await requestLoan(pending.input, API_URL, pending.key);
+      pending = null;
+      loan = decision.loan;
+      if (decision.outcome === 'approved') onRequested?.(decision.loan);
+      else error = decision.message;
     } catch (cause) {
       error = cause instanceof Error ? cause.message : 'Something went wrong';
     } finally {
@@ -38,7 +52,7 @@
     }
   }
 
-  const dueDate = $derived(loan ? new Date(loan.term.dueAt).toLocaleDateString() : null);
+  const dueDate = $derived(loan ? new Date(loan.dueAt).toLocaleDateString() : null);
 </script>
 
 <section class="card">
@@ -83,8 +97,8 @@
 
   {#if loan}
     <p class="result">
-      Requested {loan.treat.name} ({loan.principalKcal} kcal), due {dueDate}.
-      Repay with {loan.requirement.target} stand hours.
+      Approved {treat.name} ({loan.principalKcal} kcal), due {dueDate}.
+      Repayment target: {loan.repaymentTargetKcal} Move kcal.
     </p>
   {:else if error}
     <p class="error">{error}</p>

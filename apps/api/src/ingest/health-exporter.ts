@@ -1,10 +1,15 @@
 import type { KnownMetricName, NormalizedSample } from '@burn-rate/api-schema';
+import { Temporal } from '@js-temporal/polyfill';
+import type { NormalizedRingSummary } from '../credit/types';
 import { DropLog, isFiniteNumber, normalizeSourceName } from './shared';
 
 export interface HealthExporterPayload {
   schemaVersion: string;
   samples: HealthExporterSample[];
   device?: { model?: string };
+  createdAt?: string;
+  timezone?: string;
+  timeZone?: string;
 }
 
 interface SourceInfo {
@@ -28,6 +33,8 @@ export interface HealthExporterSample {
   source?: SourceInfo;
   device?: SampleDevice;
   activitySummary?: Record<string, unknown>;
+  timezone?: string;
+  timeZone?: string;
 }
 
 /** HealthKit quantity types we store; anything else is dropped and logged. */
@@ -56,6 +63,57 @@ const SUMMARY_FIELDS = [
 export interface MapResult {
   samples: NormalizedSample[];
   drops: DropLog;
+  ringSummaries?: NormalizedRingSummary[];
+}
+
+function textOrNull(value: unknown): string | null {
+  return typeof value === 'string' && value.trim() ? value : null;
+}
+
+function timestampOrNull(value: unknown): string | null {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}T.*(?:Z|[+-]\d{2}:\d{2})$/i.test(value)) return null;
+  try { return Temporal.Instant.from(value).toString(); } catch { return null; }
+}
+
+function normalizedSourceIdentity(source: SourceInfo | undefined): string | null {
+  const bundle = textOrNull(source?.bundleIdentifier);
+  if (bundle) return bundle.trim();
+  const name = textOrNull(source?.name);
+  if (!name) return null;
+  const normalized = normalizeSourceName(name).trim();
+  return normalized.toLowerCase() === 'apple fitness' ? 'com.apple.Fitness' : normalized;
+}
+
+/** Preserve a whole revision even when values or provenance are incomplete. */
+function mapRingSummary(sample: HealthExporterSample, payload: HealthExporterPayload): NormalizedRingSummary {
+  const summary = sample.activitySummary ?? {};
+  const mode = summary.activityMoveMode;
+  const moveMode = mode === 1 || mode === 'energy' || mode === 'activeEnergy' ? 'energy'
+    : mode === 2 || mode === 'time' || mode === 'appleMoveTime' ? 'time' : null;
+  const ring = (actual: unknown, goal: unknown, unit: unknown): NormalizedRingSummary['move'] => ({
+    actual: isFiniteNumber(actual) ? actual : null,
+    goal: isFiniteNumber(goal) ? goal : null,
+    unit: textOrNull(unit)
+  });
+  return {
+    sourceIdentity: normalizedSourceIdentity(sample.source),
+    sourceRecordId: textOrNull(sample.uuid) ?? textOrNull(sample.id),
+    localDate: textOrNull(summary.date),
+    timeZone: textOrNull(summary.timezone) ?? textOrNull(summary.timeZone) ?? textOrNull(sample.timezone) ??
+      textOrNull(sample.timeZone) ?? textOrNull(payload.timezone) ?? textOrNull(payload.timeZone),
+    startsAt: timestampOrNull(sample.startAt),
+    endsAt: timestampOrNull(sample.endAt),
+    revisionAt: timestampOrNull(payload.createdAt),
+    moveMode,
+    paused: typeof summary.paused === 'boolean' ? summary.paused : null,
+    move: moveMode === 'energy'
+      ? ring(summary.activeEnergyBurned, summary.activeEnergyBurnedGoal, summary.activeEnergyUnit)
+      : moveMode === 'time'
+        ? ring(summary.appleMoveTime, summary.appleMoveTimeGoal, summary.moveTimeUnit)
+        : ring(null, null, null),
+    exercise: ring(summary.appleExerciseTime, summary.appleExerciseTimeGoal, summary.exerciseTimeUnit),
+    stand: ring(summary.appleStandHours, summary.appleStandHoursGoal, summary.standHoursUnit)
+  };
 }
 
 function sampleBase(
@@ -137,11 +195,13 @@ export function mapHealthExporter(
 ): MapResult {
   const drops = new DropLog();
   const samples: NormalizedSample[] = [];
+  const ringSummaries: NormalizedRingSummary[] = [];
 
   for (const sample of body.samples ?? []) {
     const base = sampleBase(sample, body.device?.model, dumpKey, userId);
 
     if (sample.typeIdentifier === 'HKActivitySummaryTypeIdentifier') {
+      ringSummaries.push(mapRingSummary(sample, body));
       samples.push(...mapActivitySummary(sample, base, drops));
       continue;
     }
@@ -155,5 +215,5 @@ export function mapHealthExporter(
     if (mapped) samples.push(mapped);
   }
 
-  return { samples, drops };
+  return { samples, drops, ringSummaries };
 }

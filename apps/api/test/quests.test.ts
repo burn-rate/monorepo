@@ -30,24 +30,20 @@ function exerciseSample(endedMinutesAgo: number, value = 1): QuestSample {
   return { ...standSample(endedMinutesAgo, value), metric: 'exercise_time' };
 }
 
-const BASE_TERM = {
-  length: 7,
-  unit: 'days' as const,
-  timeZone: 'America/Los_Angeles',
-  startsAt: '2026-10-22T10:00:00.000Z',
-  dueAt: '2026-10-29T10:00:00.000Z'
-};
-
 function makeLoan(overrides: Partial<Loan> = {}): Loan {
   return {
     id: 'loan-1',
-    userId: 'default',
-    requestId: 'req-1',
-    approvedAt: '2026-10-22T10:00:00.000Z',
-    treat: { id: 'donut', name: 'Donut', serving: '1 donut', caloriesKcal: 250, isEstimate: false },
     principalKcal: 250,
-    term: BASE_TERM,
-    requirement: { metric: 'stand_hours', target: 12 },
+    outstandingKcal: 250,
+    repaymentMetric: 'move_kcal',
+    repaymentMultiplier: 1.5,
+    repaymentTargetKcal: 375,
+    repaymentProgressKcal: 0,
+    durationDays: 7,
+    timeZone: 'America/Los_Angeles',
+    startsAt: '2026-10-22T10:00:00.000Z',
+    dueAt: '2026-10-29T10:00:00.000Z',
+    policyVersion: 'ring-consistency-v1',
     status: 'active',
     ...overrides
   };
@@ -65,9 +61,9 @@ function candidate(
   return {
     loan: makeLoan({
       id,
-      approvedAt: opts.approvedAt,
-      status: opts.status,
-      ...(opts.dueAt ? { term: { ...BASE_TERM, dueAt: opts.dueAt } } : {})
+      ...(opts.approvedAt ? { startsAt: opts.approvedAt } : {}),
+      ...(opts.status ? { status: opts.status } : {}),
+      ...(opts.dueAt ? { dueAt: opts.dueAt } : {})
     }),
     outstandingKcal: opts.outstandingKcal ?? 100
   };

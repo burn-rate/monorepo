@@ -83,36 +83,145 @@ export type RevokedIngestionToken = {
     revoked: true;
 };
 
-export type LoanRequestRecord = {
-    id: string;
-    userId: string;
-    requestedAt: string;
-    status: 'requested';
-    treatId: 'donut' | 'beer';
-    treat: {
-        id: 'donut' | 'beer';
-        name: string;
-        serving: string;
-        caloriesKcal: number;
-        isEstimate: boolean;
-    };
-    principalKcal: number;
-    term: {
-        length: number;
-        unit: 'days' | 'weeks' | 'months';
+export type CreditSnapshot = {
+    score: number | null;
+    creditLimitKcal: number;
+    outstandingKcal: number;
+    /**
+     * Limit minus full unpaid principal; may be negative.
+     */
+    availableKcal: number;
+    repaymentMultiplier: number;
+    historyDays: number;
+    /**
+     * IANA time zone, such as America/Los_Angeles. Equivalent zone aliases are canonicalized by the server.
+     */
+    timeZone: string;
+    /**
+     * UTC ISO timestamp.
+     */
+    calculatedAt: string;
+    policyVersion: 'ring-consistency-v1';
+};
+
+export type LoansResponse = {
+    loans: Array<{
+        id: string;
+        status: 'active' | 'repaid' | 'overdue';
+        principalKcal: number;
+        /**
+         * Full principal until authoritative full repayment; partial progress releases none.
+         */
+        outstandingKcal: number;
+        repaymentMetric: 'move_kcal';
+        repaymentMultiplier: number;
+        repaymentTargetKcal: number;
+        repaymentProgressKcal: number;
+        durationDays: number;
+        /**
+         * IANA time zone, such as America/Los_Angeles. Equivalent zone aliases are canonicalized by the server.
+         */
         timeZone: string;
+        /**
+         * UTC ISO timestamp.
+         */
         startsAt: string;
+        /**
+         * UTC ISO timestamp.
+         */
         dueAt: string;
-    };
-    requirement: {
-        metric: 'stand_hours';
-        target: number;
+        policyVersion: 'ring-consistency-v1';
+    }>;
+};
+
+export type DeniedLoanDecision = {
+    outcome: 'denied';
+    loan: null;
+    reason: 'insufficient-credit';
+    message: string;
+    credit: {
+        score: number | null;
+        creditLimitKcal: number;
+        outstandingKcal: number;
+        /**
+         * Limit minus full unpaid principal; may be negative.
+         */
+        availableKcal: number;
+        repaymentMultiplier: number;
+        historyDays: number;
+        /**
+         * IANA time zone, such as America/Los_Angeles. Equivalent zone aliases are canonicalized by the server.
+         */
+        timeZone: string;
+        /**
+         * UTC ISO timestamp.
+         */
+        calculatedAt: string;
+        policyVersion: 'ring-consistency-v1';
     };
 };
 
-export type CreateLoanRequest = {
-    treatId: 'donut' | 'beer';
-    termUnit: 'days' | 'weeks' | 'months';
+export type ApprovedLoanDecision = {
+    outcome: 'approved';
+    loan: {
+        id: string;
+        status: 'active' | 'repaid' | 'overdue';
+        principalKcal: number;
+        /**
+         * Full principal until authoritative full repayment; partial progress releases none.
+         */
+        outstandingKcal: number;
+        repaymentMetric: 'move_kcal';
+        repaymentMultiplier: number;
+        repaymentTargetKcal: number;
+        repaymentProgressKcal: number;
+        durationDays: number;
+        /**
+         * IANA time zone, such as America/Los_Angeles. Equivalent zone aliases are canonicalized by the server.
+         */
+        timeZone: string;
+        /**
+         * UTC ISO timestamp.
+         */
+        startsAt: string;
+        /**
+         * UTC ISO timestamp.
+         */
+        dueAt: string;
+        policyVersion: 'ring-consistency-v1';
+    };
+    credit: {
+        score: number | null;
+        creditLimitKcal: number;
+        outstandingKcal: number;
+        /**
+         * Limit minus full unpaid principal; may be negative.
+         */
+        availableKcal: number;
+        repaymentMultiplier: number;
+        historyDays: number;
+        /**
+         * IANA time zone, such as America/Los_Angeles. Equivalent zone aliases are canonicalized by the server.
+         */
+        timeZone: string;
+        /**
+         * UTC ISO timestamp.
+         */
+        calculatedAt: string;
+        policyVersion: 'ring-consistency-v1';
+    };
+};
+
+export type CreateLoanInput = {
+    /**
+     * Positive finite calorie principal. No additional decimal-place restriction.
+     */
+    amountKcal: number;
+    durationDays: number;
+    /**
+     * IANA time zone, such as America/Los_Angeles. Equivalent zone aliases are canonicalized by the server.
+     */
+    timeZone: string;
 };
 
 export type HookSuccess = {
@@ -454,30 +563,147 @@ export type RevokeIngestionTokenResponses = {
 
 export type RevokeIngestionTokenResponse = RevokeIngestionTokenResponses[keyof RevokeIngestionTokenResponses];
 
-export type CreateLoanRequestData = {
-    body: CreateLoanRequest;
+export type GetScoreData = {
+    body?: never;
     path?: never;
-    query?: never;
-    url: '/loan';
+    query: {
+        /**
+         * IANA time zone, such as America/Los_Angeles. Equivalent zone aliases are canonicalized by the server.
+         */
+        timeZone: string;
+    };
+    url: '/score';
 };
 
-export type CreateLoanRequestErrors = {
+export type GetScoreErrors = {
     /**
      * Invalid request or cursor.
      */
     400: ApiError;
-};
-
-export type CreateLoanRequestError = CreateLoanRequestErrors[keyof CreateLoanRequestErrors];
-
-export type CreateLoanRequestResponses = {
     /**
-     * Stubbed loan request with computed term and placeholder requirement.
+     * A valid session is required.
      */
-    201: LoanRequestRecord;
+    401: ApiError;
+    /**
+     * Trusted origin or fresh passkey verification is required.
+     */
+    403: ApiError;
+    /**
+     * Rate limit exceeded; retry later.
+     */
+    429: ApiError;
+    /**
+     * Service unavailable; retry later.
+     */
+    503: ApiError;
 };
 
-export type CreateLoanRequestResponse = CreateLoanRequestResponses[keyof CreateLoanRequestResponses];
+export type GetScoreError = GetScoreErrors[keyof GetScoreErrors];
+
+export type GetScoreResponses = {
+    /**
+     * Current owner credit snapshot.
+     */
+    200: CreditSnapshot;
+};
+
+export type GetScoreResponse = GetScoreResponses[keyof GetScoreResponses];
+
+export type ListLoansData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/loans';
+};
+
+export type ListLoansErrors = {
+    /**
+     * Invalid request or cursor.
+     */
+    400: ApiError;
+    /**
+     * A valid session is required.
+     */
+    401: ApiError;
+    /**
+     * Trusted origin or fresh passkey verification is required.
+     */
+    403: ApiError;
+    /**
+     * Rate limit exceeded; retry later.
+     */
+    429: ApiError;
+    /**
+     * Service unavailable; retry later.
+     */
+    503: ApiError;
+};
+
+export type ListLoansError = ListLoansErrors[keyof ListLoansErrors];
+
+export type ListLoansResponses = {
+    /**
+     * Owner loans, or an empty loans array.
+     */
+    200: LoansResponse;
+};
+
+export type ListLoansResponse = ListLoansResponses[keyof ListLoansResponses];
+
+export type CreateLoanData = {
+    body: CreateLoanInput;
+    headers: {
+        /**
+         * Reuse this key and the same validated body to retry the original decision. Use a new key for a new application.
+         */
+        'idempotency-key': string;
+    };
+    path?: never;
+    query?: never;
+    url: '/loans';
+};
+
+export type CreateLoanErrors = {
+    /**
+     * Invalid request or cursor.
+     */
+    400: ApiError;
+    /**
+     * A valid session is required.
+     */
+    401: ApiError;
+    /**
+     * Trusted origin or fresh passkey verification is required.
+     */
+    403: ApiError;
+    /**
+     * Idempotency key was already used with different validated input.
+     */
+    409: ApiError;
+    /**
+     * Rate limit exceeded; retry later.
+     */
+    429: ApiError;
+    /**
+     * Service unavailable; retry later.
+     */
+    503: ApiError;
+};
+
+export type CreateLoanError = CreateLoanErrors[keyof CreateLoanErrors];
+
+export type CreateLoanResponses = {
+    /**
+     * Durable insufficient-credit business denial; no loan is created.
+     */
+    200: DeniedLoanDecision;
+    /**
+     * Approved loan and post-reservation credit.
+     */
+    201: ApprovedLoanDecision;
+};
+
+export type CreateLoanResponse = CreateLoanResponses[keyof CreateLoanResponses];
 
 export type UploadHealthPayloadData = {
     body: unknown;

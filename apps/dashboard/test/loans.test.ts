@@ -16,53 +16,61 @@ import {
   TREAT_ART
 } from '../src/lib/loans';
 
-const validBody = {
-  id: 'loan-1',
-  userId: 'default',
-  requestedAt: '2026-10-22T12:00:00.000Z',
-  status: 'requested',
-  treatId: 'donut',
-  treat: { id: 'donut', name: 'Donut', serving: '1 donut', caloriesKcal: 400, isEstimate: true },
-  principalKcal: 400,
-  term: {
-    length: 1,
-    unit: 'weeks',
-    timeZone: 'America/Los_Angeles',
-    startsAt: '2026-10-22T12:00:00.000Z',
-    dueAt: '2026-10-29T12:00:00.000Z'
-  },
-  requirement: { metric: 'stand_hours', target: 84 }
+const input = { amountKcal: 400, durationDays: 7, timeZone: 'America/Los_Angeles' };
+const credit = {
+  score: 850, creditLimitKcal: 2000, outstandingKcal: 400, availableKcal: 1600,
+  repaymentMultiplier: 1.05, historyDays: 7, timeZone: input.timeZone,
+  calculatedAt: '2026-10-22T12:00:00.000Z', policyVersion: 'ring-consistency-v1'
 };
+const validBody = { outcome: 'approved', loan: viewLoan({ principalKcal: 400 }), credit };
 
 afterEach(() => vi.unstubAllGlobals());
 
 describe('requestLoan', () => {
-  it('posts to /loan and returns the parsed stub terms', async () => {
+  it('posts calorie terms to /loans with session credentials and an idempotency key', async () => {
     const fetchMock = vi.fn(async () => Response.json(validBody, { status: 201 }));
     vi.stubGlobal('fetch', fetchMock);
 
-    const loan = await requestLoan({ treatId: 'donut', termUnit: 'weeks' }, 'https://api.example.com');
+    const loan = await requestLoan(input, 'https://api.example.com', 'application-1');
 
-    expect(fetchMock.mock.calls[0][0]).toBe('https://api.example.com/loan');
+    expect(fetchMock.mock.calls[0][0]).toBe('https://api.example.com/loans');
     const init = fetchMock.mock.calls[0][1] as RequestInit;
     expect(init.method).toBe('POST');
-    expect(JSON.parse(String(init.body))).toEqual({ treatId: 'donut', termUnit: 'weeks' });
-    expect(loan.principalKcal).toBe(400);
-    expect(loan.term.dueAt).toBe('2026-10-29T12:00:00.000Z');
-    expect(loan.requirement.target).toBe(84);
+    expect(JSON.parse(String(init.body))).toEqual(input);
+    expect(init.credentials).toBe('include');
+    expect(new Headers(init.headers).get('Idempotency-Key')).toBe('application-1');
+    expect(loan.outcome).toBe('approved');
+    expect(loan.loan?.principalKcal).toBe(400);
+    expect(loan.loan?.dueAt).toBe('2026-10-29T21:05:00Z');
+  });
+
+  it('returns insufficient-credit denials even with a successful HTTP response', async () => {
+    const denial = { outcome: 'denied', loan: null, reason: 'insufficient-credit', message: 'Insufficient credit.', credit };
+    vi.stubGlobal('fetch', vi.fn(async () => Response.json(denial)));
+    await expect(requestLoan(input, 'https://api.example.com', 'denied-1')).resolves.toEqual(denial);
+  });
+
+  it('reuses the supplied key and body when retrying after a lost response', async () => {
+    const fetchMock = vi.fn()
+      .mockRejectedValueOnce(new TypeError('Connection lost'))
+      .mockResolvedValueOnce(Response.json(validBody, { status: 201 }));
+    vi.stubGlobal('fetch', fetchMock);
+    await expect(requestLoan(input, 'https://api.example.com', 'retry-1')).rejects.toThrow('Connection lost');
+    await requestLoan(input, 'https://api.example.com', 'retry-1');
+    expect(fetchMock.mock.calls[0]).toEqual(fetchMock.mock.calls[1]);
   });
 
   it('throws on a non-2xx response', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response('nope', { status: 400 })));
     await expect(
-      requestLoan({ treatId: 'beer', termUnit: 'days' }, 'https://api.example.com')
+      requestLoan(input, 'https://api.example.com', 'application-1')
     ).rejects.toThrow('failed (400)');
   });
 
   it('throws when the response violates the contract', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => Response.json({ garbage: true })));
     await expect(
-      requestLoan({ treatId: 'beer', termUnit: 'days' }, 'https://api.example.com')
+      requestLoan(input, 'https://api.example.com', 'application-1')
     ).rejects.toThrow();
   });
 });

@@ -4,7 +4,7 @@ import { fileURLToPath, URL as NodeURL } from 'node:url';
 import type { Sql } from '../src/db';
 
 export const DEFAULT_MIGRATIONS = Object.freeze([
-  '000_metrics.sql', '002_encrypted.sql', '004_auth.sql', '005_limits.sql'
+  '000_metrics.sql', '002_encrypted.sql', '004_auth.sql', '005_limits.sql', '006_activity_credit.sql'
 ] as const);
 
 export interface MigrationOptions {

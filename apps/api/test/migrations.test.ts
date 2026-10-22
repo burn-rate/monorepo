@@ -12,13 +12,14 @@ const files: Record<string, string> = {
   '002_encrypted.sql': 'CREATE TABLE encrypted_probe (id INTEGER PRIMARY KEY)',
   '004_auth.sql': 'CREATE TABLE auth_probe (id INTEGER PRIMARY KEY)',
   '005_limits.sql': 'CREATE TABLE limits_probe (id INTEGER PRIMARY KEY)',
+  '006_activity_credit.sql': 'CREATE TABLE credit_probe (id INTEGER PRIMARY KEY)',
   '003_cutover.sql': 'CREATE TABLE cutover_probe (id INTEGER PRIMARY KEY)'
 };
 const loadMigration = async (name: string) => files[name];
 
 beforeAll(async () => { database = new PGlite(); }, 30_000);
 beforeEach(async () => {
-  await database.exec('DROP TABLE IF EXISTS api_migrations, migration_probe, encrypted_probe, auth_probe, limits_probe, cutover_probe, rollback_probe');
+  await database.exec('DROP TABLE IF EXISTS api_migrations, migration_probe, encrypted_probe, auth_probe, limits_probe, credit_probe, cutover_probe, rollback_probe');
   locks = [];
   statements = [];
   sql = { query: async (text: string, values?: unknown[]) => {
@@ -77,7 +78,7 @@ it('rejects an applied checksum change before any new DDL and releases the lock'
   const changed = async (name: string) => `${files[name]}${name === '000_metrics.sql' ? '; -- changed private secret' : ''}`;
   await expect(applyMigrations(sql, { loadMigration: changed })).rejects.toMatchObject({ stage: 'checksum', migration: '000_metrics.sql' });
   expect((await database.query("SELECT to_regclass('limits_probe') AS pending")).rows[0]).toEqual({ pending: null });
-  expect((await database.query('SELECT count(*)::text AS count FROM api_migrations')).rows[0]).toEqual({ count: '3' });
+  expect((await database.query('SELECT count(*)::text AS count FROM api_migrations')).rows[0]).toEqual({ count: String(DEFAULT_MIGRATIONS.length - 1) });
   expect(locks).toEqual(['lock', 'unlock', 'lock', 'unlock']);
 });
 
@@ -98,7 +99,7 @@ it('fails deployment when advisory lock cleanup fails, without exposing the driv
   expect(failure).toMatchObject({ stage: 'unlock' });
   expect(String(failure)).not.toContain('private driver');
   // Caller cleanup closes the connection and releases any remaining session lock.
-  expect((await database.query('SELECT count(*)::text AS count FROM api_migrations')).rows[0]).toEqual({ count: '4' });
+  expect((await database.query('SELECT count(*)::text AS count FROM api_migrations')).rows[0]).toEqual({ count: String(DEFAULT_MIGRATIONS.length) });
 });
 
 it('rolls back DDL when its ledger insert fails and releases the lock', async () => {

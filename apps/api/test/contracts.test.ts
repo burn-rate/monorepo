@@ -36,6 +36,15 @@ describe('frontend contracts', () => {
     expect(JSON.stringify(document)).toBe(JSON.stringify(getOpenApiDocument(createOfflineContractApp())));
     expect(document.paths?.['/api/health/samples']?.get?.operationId).toBe('listHealthSamples');
     expect(document.paths?.['/api/health/samples']?.get?.security).toEqual([{ sessionCookie: [] }]);
+    expect(document.paths?.['/score']?.get?.operationId).toBe('getScore');
+    expect(document.paths?.['/score']?.get?.security).toEqual([{ sessionCookie: [] }]);
+    expect(document.paths?.['/loans']?.get?.operationId).toBe('listLoans');
+    expect(document.paths?.['/loans']?.get?.security).toEqual([{ sessionCookie: [] }]);
+    expect(document.paths).not.toHaveProperty('/loan');
+    expect(document.paths?.['/loans']?.post?.operationId).toBe('createLoan');
+    expect(document.paths?.['/loans']?.post?.security).toEqual([{ sessionCookie: [] }]);
+    expect(document.paths?.['/loans']?.post?.parameters).toEqual(expect.arrayContaining([expect.objectContaining({ in: 'header', name: 'idempotency-key', required: true })]));
+    expect(Object.keys(document.paths?.['/loans']?.post?.responses ?? {})).toEqual(['200', '201', '400', '401', '403', '409', '429', '503']);
     expect(document.paths?.['/hook']?.post?.security).toEqual([{ ingestionBearer: [] }]);
     expect(document.paths).not.toHaveProperty('/api/auth/sign-in');
     expect(await (await app.request('/health')).json()).toEqual({ status: 'ok', service: 'burn-rate-api' });
@@ -47,8 +56,7 @@ describe('frontend contracts', () => {
     const services: ApiServices<Record<string, never>> = {
       timeseriesHealth: unavailable, getCurrentUser: unavailable, listMetrics: unavailable,
       listHealthSamples: sampleRead, createIngestionToken: unavailable,
-      listIngestionTokens: unavailable, revokeIngestionToken: unavailable,
-      createLoanRequest: unavailable, ingest: unavailable
+      listIngestionTokens: unavailable, revokeIngestionToken: unavailable, getScore: unavailable, listLoans: unavailable, createLoan: unavailable, ingest: unavailable
     };
     const app = new OpenAPIHono<ApiEnvironment<Record<string, never>>>();
     app.use('*', async (c, next) => { c.set('requestId', 'test-request'); await next(); });
@@ -69,8 +77,7 @@ describe('frontend contracts', () => {
     registerApiRoutes(app, {
       timeseriesHealth: unavailable, getCurrentUser: unavailable, listMetrics: unavailable,
       listHealthSamples: unavailable, createIngestionToken: unavailable,
-      listIngestionTokens: unavailable, revokeIngestionToken: unavailable,
-      createLoanRequest: unavailable,
+      listIngestionTokens: unavailable, revokeIngestionToken: unavailable, getScore: unavailable, listLoans: unavailable, createLoan: unavailable,
       ingest: async ({ request }) => { consumed = request.bodyUsed; return new Response(null, { status: 401 }); }
     });
     const response = await app.request('/hook', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{invalid' });

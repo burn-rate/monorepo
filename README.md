@@ -14,18 +14,25 @@ packages/
   design-tokens/ Simpsons donut theme: CSS custom properties and TS tokens
 ```
 
-## Activity credit planning
+## Activity credit API
 
-The [activity credit contract](docs/activity-credit-contract.md) defines ring-based
-treat loans, calorie credit limits, activity repayment, and exclusive allocation
-to the eligible loan due soonest. The [PR and implementation plan](docs/activity-credit-plan.md)
-separates the lending scaffold from future feature work.
+Session-protected `GET /score?timeZone=<IANA-zone>` returns a ring-derived score,
+credit limit and remaining budget. `GET /loans` returns all retained loans owned
+by the session, newest first, in `{ loans: [] }` (empty when there are none).
+`POST /loans` accepts raw `amountKcal`, integer
+`durationDays` (1–30), and `timeZone`, with an `Idempotency-Key` header. It returns
+an approved loan or an explicit successful business denial. The server fixes
+Move-kcal repayment terms and reserves full unpaid principal; negative available
+credit remains visible. Automatic repayment is deferred: imports and elapsed
+time do not release principal.
 
-Draft type-only boundaries are exported from `@burn-rate/api-schema/activity-credit`.
-The versioned [treat catalog](data/treats.json) is an empty scaffold pending sourced
-entries and will seed the runtime catalog in TimescaleDB/Postgres. All application
-data will use that single database. Scoring, lending, and repayment
-behavior are not implemented.
+See the [activity credit contract](docs/activity-credit-contract.md),
+[implementation and follow-up plan](docs/activity-credit-plan.md), and copyable
+[generated SDK handoff](packages/sdk/README.md). Runtime schemas and inferred
+types are exported from `@burn-rate/api-schema/activity-credit` and the package
+root. The optional [treat catalog](data/treats.json) remains an empty future
+scaffold. All application persistence uses TimescaleDB/Postgres. Source
+implementation requires the checked migration and Worker rollout before use.
 
 ## Development
 
@@ -54,12 +61,13 @@ pnpm check:generated  # Detect tracked and untracked generated output drift
 
 ## API and databases
 
-The Hono Worker exposes public `GET /health` and `/openapi.json`, Better Auth passkey endpoints under `/api/auth/*`, session-protected account/metric/sample reads, and ingestion-token management. Runtime Zod contracts live in `@burn-rate/api-schema`; `@burn-rate/sdk` is generated offline from those route contracts. See the [frontend SDK handoff](packages/sdk/README.md), [passkey contract](docs/auth-handoff.md), and [deployment instructions](docs/api-deployment.md).
+The Hono Worker exposes public `GET /health` and `/openapi.json`, Better Auth passkey endpoints under `/api/auth/*`, session-protected account/metric/sample and score reads, loan decisions, and ingestion-token management. Runtime Zod contracts live in `@burn-rate/api-schema`; `@burn-rate/sdk` is generated offline from those route contracts. See the [frontend SDK handoff](packages/sdk/README.md), [passkey contract](docs/auth-handoff.md), and [deployment instructions](docs/api-deployment.md).
 
-TimescaleDB/Postgres is the planned single application database. Activity
-observations use Timescale hypertables; users, treats, loans, decisions, balances,
-and repayment allocations use regular Postgres tables in the same database.
-Postgres transactions and constraints will enforce lending and repayment integrity.
+TimescaleDB/Postgres is the single application database. Activity
+observations use Timescale hypertables; account, key, ring-summary, loan, decision
+and coordination records use regular Postgres tables in the same database.
+The treat catalog and repayment allocations remain future work.
+Postgres transactions and constraints enforce loan idempotency and full-principal reservation; automatic repayment remains future work.
 
 External timeseries data is normalized and stored in TimescaleDB (Tiger Cloud service `ckjasrhdwa`, DEV). The Worker connects through a Hyperdrive binding (`TIMESERIES_DB`).
 

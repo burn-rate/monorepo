@@ -62,9 +62,9 @@ request credentials, SQL parameters, or serialized SDK/driver exceptions.
    committed, or exposed to browser code. Keep synthetic validation data in a
    disposable database or isolated test schema.
 2. Run `pnpm db:migrate` for the selected target. The checksummed runner applies
-   `000_metrics.sql`, `002_encrypted.sql`, `004_auth.sql`, and `005_limits.sql`,
+   `000_metrics.sql`, `002_encrypted.sql`, `004_auth.sql`, `005_limits.sql`, and `006_activity_credit.sql`,
    bootstrapping the registry and creating encrypted sample/key, canonical
-   auth/token, and rate-limit storage directly. Auth uses the shared `user`,
+   auth/token, rate-limit, and encrypted credit storage directly. Auth uses the shared `user`,
    `session`, `account`, `verification`, and `passkey` tables from `@burn-rate/db`;
    `004` supplies the required additive upgrades without a parallel auth store. Do not run historical `001_init.sql` on a
    fresh target: it creates plaintext samples and a daily aggregate. Fresh
@@ -253,7 +253,7 @@ and retired DEKs and the stable index key are rewrapped under the new KEK;
 payload ciphertext remains unchanged. Confirm the SQL key inventory reports
 the new wrapping ID, authenticate sample/R2 reads, and restore a staging copy
 with the intended retained versions. Keep old KEKs for snapshots containing
-old wraps until those snapshots are migrated or expire. Live sample counts
+old wraps until those snapshots are migrated or expire. Live record counts
 alone do not establish that a key is dispensable: `key-inventory` also checks
 live R2 DEK references, and the external backup ledger supplies recoverable
 backup dependencies. Normal rotation never changes the index key; changing it
@@ -280,3 +280,41 @@ fixtures. The authorized disposable SQL cleanup does not claim those ceremonies
 have run and does not establish R2 or backup status. Record configured-database
 inspection, that committed cleanup, and isolated
 Timescale verification separately from operational deployment.
+
+## Activity-credit encrypted records
+
+`006_activity_credit.sql` adds regular Postgres tables in the existing database.
+`activity_ring_summaries` encrypts each complete source revision, including local
+date/zone, source identity, Move mode, pause state, ring actuals and historical
+goals. Owner-bound HMACs index source/day identity and requested calendar days;
+export revision timestamps, content digests, opaque IDs and envelope metadata
+remain readable. Corrections replace a whole revision by export timestamp and
+content HMAC, independent of receipt order. An identifiable day with missing
+revision provenance stays quarantined; receipt time never supplies provenance.
+Old metric-only rows are not promoted to scoring summaries.
+
+`calorie_loans` encrypts exact decimal principal/target and immutable approved
+terms. `calorie_loan_decisions` encrypts original approval or denial responses,
+including their credit snapshot. Idempotency keys and normalized request
+fingerprints use distinct owner-bound HMAC domains, never plaintext. All three
+record families authenticate their owner, kind, opaque identity and readable
+query metadata. Decryption/schema failure returns a safe error, never starter
+credit. Logs must contain only safe request identifiers, codes and counts.
+
+`key-inventory` includes `live_ring_summaries`, `live_loans` and
+`live_loan_decisions` alongside `live_samples`. Count every family, live R2
+objects and recoverable backups before retiring wrapping material. Routine
+DEK rotation preserves retired DEKs and the stable index key; old summary, loan
+and decision envelopes remain decryptable. KEK rewrap changes wrapped keys
+without rewriting those envelopes. Test restore and original-decision replay
+with retained keys before operational rotation. No key deletion is introduced.
+
+The loan service provisions/loads its request keyring before `BEGIN`, then
+passes it into transaction helpers. First-use key provisioning has its own
+transaction and must never run inside the loan reservation transaction.
+Disable Hyperdrive query caching for credit reads as well as sessions/keys.
+
+Rollback may disable credit routes, but must retain encrypted summaries, loans,
+decisions, keys and full-principal reservations. Passing a deadline, importing
+activity or rolling back does not repay a loan. Automated repayment and any
+source-preserving historical reprocessing remain separate changes.

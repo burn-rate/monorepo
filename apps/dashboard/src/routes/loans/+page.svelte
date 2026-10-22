@@ -7,17 +7,22 @@
   import { LOAN_TREAT_IDS } from '@burn-rate/api-schema';
   import LoanCard from '#lib/components/LoanCard.svelte';
   import LoanHistory from '#lib/components/LoanHistory.svelte';
+
+  let historyVersion = $state(0);
 </script>
 
 <section class="wrap">
   <h1>loans</h1>
   <p class="hint">Pick a treat, pick a term. Pay it back by moving.</p>
+  <p class="hint">Automatic repayment tracking is coming later; new loans start with zero progress.</p>
   <div class="grid">
     {#each LOAN_TREAT_IDS as id (id)}
-      <LoanCard treatId={id} />
+      <LoanCard treatId={id} onRequested={() => historyVersion++} />
     {/each}
   </div>
-  <LoanHistory />
+  {#key historyVersion}
+    <LoanHistory />
+  {/key}
 </section>
 
 <style>

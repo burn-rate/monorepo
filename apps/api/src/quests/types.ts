@@ -60,8 +60,8 @@ export interface QuestDefinition {
 export interface LoanPaymentCandidate {
   loan: Loan;
   /**
-   * Outstanding kcal remaining on the loan. Derived from the allocation
-   * ledger; the Loan type itself deliberately does not carry a balance.
+   * Outstanding kcal supplied for this draft selection calculation.
+   * Selecting a quest never changes the authoritative stored loan balance.
    */
   outstandingKcal: number;
 }

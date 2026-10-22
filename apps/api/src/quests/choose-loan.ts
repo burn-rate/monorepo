@@ -31,11 +31,11 @@ function isEligible(candidate: LoanPaymentCandidate): boolean {
 
 /** Earliest deadline, then oldest approval, then loan ID. */
 function repaysFirst(a: LoanPaymentCandidate, b: LoanPaymentCandidate): boolean {
-  if (a.loan.term.dueAt !== b.loan.term.dueAt) {
-    return a.loan.term.dueAt < b.loan.term.dueAt;
+  if (a.loan.dueAt !== b.loan.dueAt) {
+    return a.loan.dueAt < b.loan.dueAt;
   }
-  if (a.loan.approvedAt !== b.loan.approvedAt) {
-    return a.loan.approvedAt < b.loan.approvedAt;
+  if (a.loan.startsAt !== b.loan.startsAt) {
+    return a.loan.startsAt < b.loan.startsAt;
   }
   return a.loan.id <= b.loan.id;
 }

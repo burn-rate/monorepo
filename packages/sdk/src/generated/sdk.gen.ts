@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { CreateIngestionTokenData, CreateIngestionTokenErrors, CreateIngestionTokenResponses, CreateLoanRequestData, CreateLoanRequestErrors, CreateLoanRequestResponses, GetCurrentUserData, GetCurrentUserErrors, GetCurrentUserResponses, GetHealthData, GetHealthResponses, GetTimeseriesHealthData, GetTimeseriesHealthErrors, GetTimeseriesHealthResponses, ListHealthSamplesData, ListHealthSamplesErrors, ListHealthSamplesResponses, ListIngestionTokensData, ListIngestionTokensErrors, ListIngestionTokensResponses, ListMetricsData, ListMetricsErrors, ListMetricsResponses, RevokeIngestionTokenData, RevokeIngestionTokenErrors, RevokeIngestionTokenResponses, UploadHealthPayloadData, UploadHealthPayloadErrors, UploadHealthPayloadResponses } from './types.gen';
+import type { CreateIngestionTokenData, CreateIngestionTokenErrors, CreateIngestionTokenResponses, CreateLoanData, CreateLoanErrors, CreateLoanResponses, GetCurrentUserData, GetCurrentUserErrors, GetCurrentUserResponses, GetHealthData, GetHealthResponses, GetScoreData, GetScoreErrors, GetScoreResponses, GetTimeseriesHealthData, GetTimeseriesHealthErrors, GetTimeseriesHealthResponses, ListHealthSamplesData, ListHealthSamplesErrors, ListHealthSamplesResponses, ListIngestionTokensData, ListIngestionTokensErrors, ListIngestionTokensResponses, ListLoansData, ListLoansErrors, ListLoansResponses, ListMetricsData, ListMetricsErrors, ListMetricsResponses, RevokeIngestionTokenData, RevokeIngestionTokenErrors, RevokeIngestionTokenResponses, UploadHealthPayloadData, UploadHealthPayloadErrors, UploadHealthPayloadResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -104,10 +104,41 @@ export const revokeIngestionToken = <ThrowOnError extends boolean = false>(optio
 });
 
 /**
- * Stub: validates a treat loan request and echoes the agreed terms. No credit decision, persistence, or session requirement yet.
+ * Ring-derived credit for the last seven completed local dates. Unknown history returns a null score. Full unpaid principal remains reserved; available credit may be negative.
  */
-export const createLoanRequest = <ThrowOnError extends boolean = false>(options: Options<CreateLoanRequestData, ThrowOnError>): RequestResult<CreateLoanRequestResponses, CreateLoanRequestErrors, ThrowOnError> => (options.client ?? client).post<CreateLoanRequestResponses, CreateLoanRequestErrors, ThrowOnError>({
-    url: '/loan',
+export const getScore = <ThrowOnError extends boolean = false>(options: Options<GetScoreData, ThrowOnError>): RequestResult<GetScoreResponses, GetScoreErrors, ThrowOnError> => (options.client ?? client).get<GetScoreResponses, GetScoreErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'better-auth.session_token',
+            type: 'apiKey'
+        }],
+    url: '/score',
+    ...options
+});
+
+/**
+ * All retained loans owned by the session, newest first by creation timestamp then ID. No timezone query or pagination is required.
+ */
+export const listLoans = <ThrowOnError extends boolean = false>(options?: Options<ListLoansData, ThrowOnError>): RequestResult<ListLoansResponses, ListLoansErrors, ThrowOnError> => (options?.client ?? client).get<ListLoansResponses, ListLoansErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'better-auth.session_token',
+            type: 'apiKey'
+        }],
+    url: '/loans',
+    ...options
+});
+
+/**
+ * Apply for raw calorie principal with fixed Move-kcal repayment terms. Same-owner retries with the same key and validated body replay the original status and body, including denials. Automatic repayment is deferred.
+ */
+export const createLoan = <ThrowOnError extends boolean = false>(options: Options<CreateLoanData, ThrowOnError>): RequestResult<CreateLoanResponses, CreateLoanErrors, ThrowOnError> => (options.client ?? client).post<CreateLoanResponses, CreateLoanErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'better-auth.session_token',
+            type: 'apiKey'
+        }],
+    url: '/loans',
     ...options,
     headers: {
         'Content-Type': 'application/json',

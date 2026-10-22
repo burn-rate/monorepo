@@ -359,155 +359,444 @@
           "revoked"
         ]
       },
-      "LoanRequestRecord": {
+      "CreditSnapshot": {
         "type": "object",
         "properties": {
-          "id": {
-            "type": "string"
+          "score": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 300,
+            "maximum": 850
           },
-          "userId": {
-            "type": "string"
+          "creditLimitKcal": {
+            "type": "number",
+            "minimum": 250,
+            "maximum": 2000
           },
-          "requestedAt": {
-            "type": "string"
+          "outstandingKcal": {
+            "type": "number",
+            "minimum": 0
           },
-          "status": {
+          "availableKcal": {
+            "type": "number",
+            "description": "Limit minus full unpaid principal; may be negative."
+          },
+          "repaymentMultiplier": {
+            "type": "number",
+            "minimum": 1.05,
+            "maximum": 1.5
+          },
+          "historyDays": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 7
+          },
+          "timeZone": {
+            "type": "string",
+            "description": "IANA time zone, such as America/Los_Angeles. Equivalent zone aliases are canonicalized by the server."
+          },
+          "calculatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "UTC ISO timestamp."
+          },
+          "policyVersion": {
             "type": "string",
             "enum": [
-              "requested"
+              "ring-consistency-v1"
             ]
-          },
-          "treatId": {
+          }
+        },
+        "required": [
+          "score",
+          "creditLimitKcal",
+          "outstandingKcal",
+          "availableKcal",
+          "repaymentMultiplier",
+          "historyDays",
+          "timeZone",
+          "calculatedAt",
+          "policyVersion"
+        ]
+      },
+      "LoansResponse": {
+        "type": "object",
+        "properties": {
+          "loans": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "active",
+                    "repaid",
+                    "overdue"
+                  ]
+                },
+                "principalKcal": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                },
+                "outstandingKcal": {
+                  "type": "number",
+                  "minimum": 0,
+                  "description": "Full principal until authoritative full repayment; partial progress releases none."
+                },
+                "repaymentMetric": {
+                  "type": "string",
+                  "enum": [
+                    "move_kcal"
+                  ]
+                },
+                "repaymentMultiplier": {
+                  "type": "number",
+                  "minimum": 1.05,
+                  "maximum": 1.5
+                },
+                "repaymentTargetKcal": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "repaymentProgressKcal": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "durationDays": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 30
+                },
+                "timeZone": {
+                  "type": "string",
+                  "description": "IANA time zone, such as America/Los_Angeles. Equivalent zone aliases are canonicalized by the server."
+                },
+                "startsAt": {
+                  "type": "string",
+                  "format": "date-time",
+                  "description": "UTC ISO timestamp."
+                },
+                "dueAt": {
+                  "type": "string",
+                  "format": "date-time",
+                  "description": "UTC ISO timestamp."
+                },
+                "policyVersion": {
+                  "type": "string",
+                  "enum": [
+                    "ring-consistency-v1"
+                  ]
+                }
+              },
+              "required": [
+                "id",
+                "status",
+                "principalKcal",
+                "outstandingKcal",
+                "repaymentMetric",
+                "repaymentMultiplier",
+                "repaymentTargetKcal",
+                "repaymentProgressKcal",
+                "durationDays",
+                "timeZone",
+                "startsAt",
+                "dueAt",
+                "policyVersion"
+              ]
+            }
+          }
+        },
+        "required": [
+          "loans"
+        ]
+      },
+      "DeniedLoanDecision": {
+        "type": "object",
+        "properties": {
+          "outcome": {
             "type": "string",
             "enum": [
-              "donut",
-              "beer"
+              "denied"
             ]
           },
-          "treat": {
+          "loan": {
+            "type": "null"
+          },
+          "reason": {
+            "type": "string",
+            "enum": [
+              "insufficient-credit"
+            ]
+          },
+          "message": {
+            "type": "string",
+            "minLength": 1
+          },
+          "credit": {
+            "type": "object",
+            "properties": {
+              "score": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "minimum": 300,
+                "maximum": 850
+              },
+              "creditLimitKcal": {
+                "type": "number",
+                "minimum": 250,
+                "maximum": 2000
+              },
+              "outstandingKcal": {
+                "type": "number",
+                "minimum": 0
+              },
+              "availableKcal": {
+                "type": "number",
+                "description": "Limit minus full unpaid principal; may be negative."
+              },
+              "repaymentMultiplier": {
+                "type": "number",
+                "minimum": 1.05,
+                "maximum": 1.5
+              },
+              "historyDays": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 7
+              },
+              "timeZone": {
+                "type": "string",
+                "description": "IANA time zone, such as America/Los_Angeles. Equivalent zone aliases are canonicalized by the server."
+              },
+              "calculatedAt": {
+                "type": "string",
+                "format": "date-time",
+                "description": "UTC ISO timestamp."
+              },
+              "policyVersion": {
+                "type": "string",
+                "enum": [
+                  "ring-consistency-v1"
+                ]
+              }
+            },
+            "required": [
+              "score",
+              "creditLimitKcal",
+              "outstandingKcal",
+              "availableKcal",
+              "repaymentMultiplier",
+              "historyDays",
+              "timeZone",
+              "calculatedAt",
+              "policyVersion"
+            ]
+          }
+        },
+        "required": [
+          "outcome",
+          "loan",
+          "reason",
+          "message",
+          "credit"
+        ]
+      },
+      "ApprovedLoanDecision": {
+        "type": "object",
+        "properties": {
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "approved"
+            ]
+          },
+          "loan": {
             "type": "object",
             "properties": {
               "id": {
                 "type": "string",
+                "minLength": 1
+              },
+              "status": {
+                "type": "string",
                 "enum": [
-                  "donut",
-                  "beer"
+                  "active",
+                  "repaid",
+                  "overdue"
                 ]
               },
-              "name": {
-                "type": "string"
-              },
-              "serving": {
-                "type": "string"
-              },
-              "caloriesKcal": {
+              "principalKcal": {
                 "type": "number",
                 "exclusiveMinimum": 0
               },
-              "isEstimate": {
-                "type": "boolean"
+              "outstandingKcal": {
+                "type": "number",
+                "minimum": 0,
+                "description": "Full principal until authoritative full repayment; partial progress releases none."
+              },
+              "repaymentMetric": {
+                "type": "string",
+                "enum": [
+                  "move_kcal"
+                ]
+              },
+              "repaymentMultiplier": {
+                "type": "number",
+                "minimum": 1.05,
+                "maximum": 1.5
+              },
+              "repaymentTargetKcal": {
+                "type": "number",
+                "minimum": 0
+              },
+              "repaymentProgressKcal": {
+                "type": "number",
+                "minimum": 0
+              },
+              "durationDays": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 30
+              },
+              "timeZone": {
+                "type": "string",
+                "description": "IANA time zone, such as America/Los_Angeles. Equivalent zone aliases are canonicalized by the server."
+              },
+              "startsAt": {
+                "type": "string",
+                "format": "date-time",
+                "description": "UTC ISO timestamp."
+              },
+              "dueAt": {
+                "type": "string",
+                "format": "date-time",
+                "description": "UTC ISO timestamp."
+              },
+              "policyVersion": {
+                "type": "string",
+                "enum": [
+                  "ring-consistency-v1"
+                ]
               }
             },
             "required": [
               "id",
-              "name",
-              "serving",
-              "caloriesKcal",
-              "isEstimate"
-            ]
-          },
-          "principalKcal": {
-            "type": "number",
-            "exclusiveMinimum": 0
-          },
-          "term": {
-            "type": "object",
-            "properties": {
-              "length": {
-                "type": "integer",
-                "exclusiveMinimum": 0
-              },
-              "unit": {
-                "type": "string",
-                "enum": [
-                  "days",
-                  "weeks",
-                  "months"
-                ]
-              },
-              "timeZone": {
-                "type": "string"
-              },
-              "startsAt": {
-                "type": "string"
-              },
-              "dueAt": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "length",
-              "unit",
+              "status",
+              "principalKcal",
+              "outstandingKcal",
+              "repaymentMetric",
+              "repaymentMultiplier",
+              "repaymentTargetKcal",
+              "repaymentProgressKcal",
+              "durationDays",
               "timeZone",
               "startsAt",
-              "dueAt"
+              "dueAt",
+              "policyVersion"
             ]
           },
-          "requirement": {
+          "credit": {
             "type": "object",
             "properties": {
-              "metric": {
+              "score": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "minimum": 300,
+                "maximum": 850
+              },
+              "creditLimitKcal": {
+                "type": "number",
+                "minimum": 250,
+                "maximum": 2000
+              },
+              "outstandingKcal": {
+                "type": "number",
+                "minimum": 0
+              },
+              "availableKcal": {
+                "type": "number",
+                "description": "Limit minus full unpaid principal; may be negative."
+              },
+              "repaymentMultiplier": {
+                "type": "number",
+                "minimum": 1.05,
+                "maximum": 1.5
+              },
+              "historyDays": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 7
+              },
+              "timeZone": {
+                "type": "string",
+                "description": "IANA time zone, such as America/Los_Angeles. Equivalent zone aliases are canonicalized by the server."
+              },
+              "calculatedAt": {
+                "type": "string",
+                "format": "date-time",
+                "description": "UTC ISO timestamp."
+              },
+              "policyVersion": {
                 "type": "string",
                 "enum": [
-                  "stand_hours"
+                  "ring-consistency-v1"
                 ]
-              },
-              "target": {
-                "type": "number",
-                "exclusiveMinimum": 0
               }
             },
             "required": [
-              "metric",
-              "target"
+              "score",
+              "creditLimitKcal",
+              "outstandingKcal",
+              "availableKcal",
+              "repaymentMultiplier",
+              "historyDays",
+              "timeZone",
+              "calculatedAt",
+              "policyVersion"
             ]
           }
         },
         "required": [
-          "id",
-          "userId",
-          "requestedAt",
-          "status",
-          "treatId",
-          "treat",
-          "principalKcal",
-          "term",
-          "requirement"
+          "outcome",
+          "loan",
+          "credit"
         ]
       },
-      "CreateLoanRequest": {
+      "CreateLoanInput": {
         "type": "object",
         "properties": {
-          "treatId": {
-            "type": "string",
-            "enum": [
-              "donut",
-              "beer"
-            ]
+          "amountKcal": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "description": "Positive finite calorie principal. No additional decimal-place restriction."
           },
-          "termUnit": {
+          "durationDays": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 30
+          },
+          "timeZone": {
             "type": "string",
-            "enum": [
-              "days",
-              "weeks",
-              "months"
-            ]
+            "description": "IANA time zone, such as America/Los_Angeles. Equivalent zone aliases are canonicalized by the server."
           }
         },
         "required": [
-          "treatId",
-          "termUnit"
-        ]
+          "amountKcal",
+          "durationDays",
+          "timeZone"
+        ],
+        "additionalProperties": false
       },
       "HookSuccess": {
         "type": "object",
@@ -1251,36 +1540,276 @@
         }
       }
     },
-    "/loan": {
-      "post": {
-        "operationId": "createLoanRequest",
-        "tags": [
-          "loans"
-        ],
-        "description": "Stub: validates a treat loan request and echoes the agreed terms. No credit decision, persistence, or session requirement yet.",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CreateLoanRequest"
-              }
-            }
+    "/score": {
+      "get": {
+        "operationId": "getScore",
+        "security": [
+          {
+            "sessionCookie": []
           }
-        },
+        ],
+        "tags": [
+          "activity credit"
+        ],
+        "description": "Ring-derived credit for the last seven completed local dates. Unknown history returns a null score. Full unpaid principal remains reserved; available credit may be negative.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "IANA time zone, such as America/Los_Angeles. Equivalent zone aliases are canonicalized by the server."
+            },
+            "required": true,
+            "description": "IANA time zone, such as America/Los_Angeles. Equivalent zone aliases are canonicalized by the server.",
+            "name": "timeZone",
+            "in": "query"
+          }
+        ],
         "responses": {
-          "201": {
-            "description": "Stubbed loan request with computed term and placeholder requirement.",
+          "200": {
+            "description": "Current owner credit snapshot.",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/LoanRequestRecord"
+                  "$ref": "#/components/schemas/CreditSnapshot"
                 }
               }
             }
           },
           "400": {
             "description": "Invalid request or cursor.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "A valid session is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Trusted origin or fresh passkey verification is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded; retry later.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable; retry later.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/loans": {
+      "get": {
+        "operationId": "listLoans",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "tags": [
+          "activity credit"
+        ],
+        "description": "All retained loans owned by the session, newest first by creation timestamp then ID. No timezone query or pagination is required.",
+        "responses": {
+          "200": {
+            "description": "Owner loans, or an empty loans array.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoansResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request or cursor.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "A valid session is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Trusted origin or fresh passkey verification is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded; retry later.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable; retry later.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "createLoan",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "tags": [
+          "activity credit"
+        ],
+        "description": "Apply for raw calorie principal with fixed Move-kcal repayment terms. Same-owner retries with the same key and validated body replay the original status and body, including denials. Automatic repayment is deferred.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Reuse this key and the same validated body to retry the original decision. Use a new key for a new application."
+            },
+            "required": true,
+            "description": "Reuse this key and the same validated body to retry the original decision. Use a new key for a new application.",
+            "name": "idempotency-key",
+            "in": "header"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateLoanInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Durable insufficient-credit business denial; no loan is created.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeniedLoanDecision"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Approved loan and post-reservation credit.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApprovedLoanDecision"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request or cursor.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "A valid session is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Trusted origin or fresh passkey verification is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Idempotency key was already used with different validated input.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded; retry later.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable; retry later.",
             "content": {
               "application/json": {
                 "schema": {
