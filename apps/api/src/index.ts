@@ -1,4 +1,4 @@
-import { healthResponseSchema } from '@burn-rate/api-schema';
+import { healthResponseSchema, timeseriesHealthResponseSchema } from '@burn-rate/api-schema';
 import { getSql } from './db';
 import { mapPayload } from './ingest';
 import { storeSamples } from './store';
@@ -7,6 +7,18 @@ export interface Env {
   DB: D1Database;
   HOOK_DUMPS: R2Bucket;
   TIMESERIES_DB: Hyperdrive;
+}
+
+async function handleTimeseriesHealth(env: Env): Promise<Response> {
+  const sql = await getSql(env);
+  try {
+    const { rows } = await sql.query('select version() as version');
+    return Response.json(
+      timeseriesHealthResponseSchema.parse({ status: 'ok', version: rows[0].version })
+    );
+  } finally {
+    await sql.end().catch(() => {});
+  }
 }
 
 async function handleHook(request: Request, env: Env, url: URL): Promise<Response> {
@@ -76,6 +88,10 @@ export default {
       return Response.json(
         healthResponseSchema.parse({ status: 'ok', service: 'burn-rate-api' })
       );
+    }
+
+    if (request.method === 'GET' && url.pathname === '/timeseries/health') {
+      return handleTimeseriesHealth(env);
     }
 
     if (url.pathname === '/hook') {

@@ -78,10 +78,11 @@ ALTER TABLE health_samples SET (
   timescaledb.compress_segmentby = 'user_id, metric, source_name',
   timescaledb.compress_orderby   = 'time DESC'
 );
-SELECT add_columnstore_policy('health_samples', after => INTERVAL '14 days',
+-- A procedure on TimescaleDB >= 2.18 (hypercore): invoke with CALL.
+CALL add_columnstore_policy('health_samples', after => INTERVAL '14 days',
   if_not_exists => TRUE);
 -- Open-source TimescaleDB equivalent:
---   SELECT add_compression_policy('health_samples', INTERVAL '14 days', if_not_exists => TRUE);
+--   SELECT add_compression_policy('health_samples', compress_after => INTERVAL '14 days', if_not_exists => TRUE);
 
 -- ---------------------------------------------------------------------------
 -- Daily rollup (tz-aware day boundaries for the user's home timezone)

@@ -4,7 +4,6 @@
   "main": "src/index.ts",
   "compatibility_date": "2026-10-21",
   "compatibility_flags": ["nodejs_compat"],
-  "compatibility_flags": ["nodejs_compat"],
   "observability": {
     "enabled": true
   },
@@ -24,14 +23,8 @@
   ],
   "hyperdrive": [
     {
-      "binding": "HYPERDRIVE",
-      "id": "2985aac84d524fbdb926e35d5cdf3eb2"
-    }
-  ],
-  "hyperdrive": [
-    {
       "binding": "TIMESERIES_DB",
-      "id": "00000000-0000-0000-0000-000000000000"
+      "id": "2985aac84d524fbdb926e35d5cdf3eb2"
     }
   ]
 }
