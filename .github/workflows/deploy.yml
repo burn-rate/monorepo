@@ -25,6 +25,14 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Guard against stale deploys
+        run: |
+          LATEST=$(git ls-remote origin refs/heads/main | cut -f1)
+          if [ "$LATEST" != "$GITHUB_SHA" ]; then
+            echo "::warning::Newer commit $LATEST is on main — skipping out-of-order deploy of $GITHUB_SHA"
+            exit 1
+          fi
+
       - name: Apply D1 migrations
         working-directory: apps/api
         run: pnpm exec wrangler d1 migrations apply burn-rate --remote
