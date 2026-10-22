@@ -2,7 +2,7 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "burn-rate-api",
   "main": "src/index.ts",
-  "account_id": "a855feec1f62b3f8eb8228967ea169bf",
+  "account_id": "888e985dae423cb6bab33658a25951de",
   "compatibility_date": "2026-10-21",
   "compatibility_flags": ["nodejs_compat"],
   "observability": {
@@ -17,7 +17,7 @@
   "hyperdrive": [
     {
       "binding": "TIMESERIES_DB",
-      "id": "2985aac84d524fbdb926e35d5cdf3eb2"
+      "id": "f8dffd1c067b482f815021bf174c3393"
     }
   ]
 }
