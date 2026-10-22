@@ -9,6 +9,8 @@
   const user = $derived($session?.data?.user ?? null);
   /** This user's personal ingest endpoint; the id attributes stored samples. */
   const ingestUrl = $derived(user ? `${API_URL}/ingest/${user.id}` : null);
+  /** Split so the unique id stays visible when the origin truncates. */
+  const ingestUrlBase = $derived(ingestUrl ? ingestUrl.slice(0, -user!.id.length) : null);
 
   let copied = $state(false);
   let copyTimer: ReturnType<typeof setTimeout> | undefined;
@@ -34,7 +36,9 @@
     <CreditScoreDonut />
     <section class="card">
       <div class="url-row">
-        <code class="url">{ingestUrl}</code>
+        <code class="url" title={ingestUrl}>
+          <span class="url-base">{ingestUrlBase}</span><span class="url-id">{user.id}</span>
+        </code>
         <button onclick={copyIngestUrl}>{copied ? 'Copied!' : 'Copy'}</button>
       </div>
       <p class="hint">Try it:</p>
@@ -105,7 +109,6 @@
     display: flex;
     align-items: center;
     gap: var(--space-2);
-    flex-wrap: wrap;
     width: 100%;
   }
 
@@ -123,8 +126,19 @@
   .url {
     flex: 1;
     min-width: 0;
-    overflow-x: auto;
+    display: flex;
     white-space: nowrap;
+  }
+
+  /* The origin shrinks with an ellipsis; the id tail never truncates. */
+  .url-base {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+  }
+
+  .url-id {
+    flex-shrink: 0;
   }
 
   .example {
@@ -134,6 +148,7 @@
   }
 
   button {
+    flex-shrink: 0;
     padding: var(--space-2) var(--space-4);
     border-radius: var(--radius-hole);
     border: none;
