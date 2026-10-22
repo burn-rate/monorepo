@@ -1,10 +1,15 @@
 /** Public deployment inputs only. Secrets are read lazily for authenticated requests. */
 export interface AuthEnvironment {
-  AUTH_SECRET: string;
-  AUTH_BASE_URL: string;
-  DASHBOARD_ORIGINS: string;
-  PASSKEY_RP_ID: string;
-  PASSKEY_RP_NAME: string;
+  /** Canonical names shared with the dashboard/main deployment. */
+  BETTER_AUTH_SECRET?: string;
+  BETTER_AUTH_URL?: string;
+  DASHBOARD_URL?: string;
+  /** Explicit compatibility aliases; canonical values take precedence. */
+  AUTH_SECRET?: string;
+  AUTH_BASE_URL?: string;
+  DASHBOARD_ORIGINS?: string;
+  PASSKEY_RP_ID?: string;
+  PASSKEY_RP_NAME?: string;
   AUTH_COOKIE_SAME_SITE?: 'lax' | 'strict' | 'none';
 }
 
@@ -28,16 +33,20 @@ export interface AuthConfig {
 
 export function readAuthConfig(env: AuthEnvironment): AuthConfig {
   try {
-    if (!env.AUTH_SECRET || env.AUTH_SECRET.length < 32) throw new Error();
-    const api = new URL(env.AUTH_BASE_URL);
-    const origins: unknown = JSON.parse(env.DASHBOARD_ORIGINS);
+    const secret = env.BETTER_AUTH_SECRET ?? env.AUTH_SECRET;
+    const baseURL = env.BETTER_AUTH_URL ?? env.AUTH_BASE_URL;
+    if (!secret || secret.length < 32 || !baseURL) throw new Error();
+    const api = new URL(baseURL);
+    const origins: unknown = env.DASHBOARD_URL !== undefined
+      ? [env.DASHBOARD_URL]
+      : JSON.parse(env.DASHBOARD_ORIGINS ?? 'null');
     if (!Array.isArray(origins) || origins.length === 0 || origins.some((o) => typeof o !== 'string')) throw new Error();
     const checkedOrigins = (origins as string[]).map((origin) => {
       const url = new URL(origin);
       if (origin !== url.origin || url.username || url.password) throw new Error();
       return url;
     });
-    if (env.AUTH_BASE_URL !== api.origin || api.username || api.password) throw new Error();
+    if (baseURL !== api.origin || api.username || api.password) throw new Error();
     const isLocal = (url: URL) => url.hostname === 'localhost' || url.hostname === '127.0.0.1';
     if ([api, ...checkedOrigins].some((url) => url.protocol !== 'https:' && !(isLocal(url) && url.protocol === 'http:'))) throw new Error();
     const rpID = env.PASSKEY_RP_ID;
@@ -47,7 +56,7 @@ export function readAuthConfig(env: AuthEnvironment): AuthConfig {
     if (!['lax', 'strict', 'none'].includes(sameSite) || (sameSite === 'none' && api.protocol !== 'https:')) throw new Error();
     if (!env.PASSKEY_RP_NAME?.trim()) throw new Error();
     return {
-      secret: env.AUTH_SECRET,
+      secret,
       baseURL: api.origin,
       trustedOrigins: [...new Set([api.origin, ...checkedOrigins.map((url) => url.origin)])],
       passkeyOrigins: [...new Set(checkedOrigins.map((url) => url.origin))],

@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "wrangler dev --port 8787 --ip 0.0.0.0 --env-file .dev.vars",
-    "tail": "wrangler tail burn-rate-api --format pretty",
+    "tail": "wrangler tail api --format pretty",
     "build": "wrangler deploy --dry-run --outdir dist",
     "check": "tsc --noEmit",
     "test": "vitest run --pool=threads",
@@ -16,8 +16,10 @@
     "db:migrate:ci": "node --import tsx scripts/migrate-ci.ts"
   },
   "dependencies": {
+    "@better-auth/drizzle-adapter": "1.7.12",
     "@better-auth/passkey": "1.7.12",
     "@burn-rate/api-schema": "workspace:*",
+    "@burn-rate/db": "workspace:*",
     "@hono/zod-openapi": "1.6.3",
     "better-auth": "1.7.12",
     "hono": "4.13.13",

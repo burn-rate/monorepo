@@ -1,85 +1,110 @@
--- Better Auth and @better-auth/passkey 1.7.12. Kept separate from health data.
-CREATE TABLE IF NOT EXISTS auth_users (
+-- Better Auth 1.7.12 canonical tables shared with @burn-rate/db.
+-- This migration bootstraps fresh installations and upgrades the existing
+-- historical Drizzle 0000 schema without rewriting that historical artifact.
+CREATE TABLE IF NOT EXISTS "user" (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
-  email TEXT NOT NULL UNIQUE,
+  email TEXT NOT NULL,
   email_verified BOOLEAN NOT NULL DEFAULT false,
   image TEXT,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  created_at TIMESTAMP NOT NULL DEFAULT now(),
+  updated_at TIMESTAMP NOT NULL DEFAULT now(),
+  CONSTRAINT user_email_unique UNIQUE (email)
 );
 
-CREATE TABLE IF NOT EXISTS auth_sessions (
+CREATE TABLE IF NOT EXISTS "session" (
   id TEXT PRIMARY KEY,
-  expires_at TIMESTAMPTZ NOT NULL,
-  token TEXT NOT NULL UNIQUE,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  expires_at TIMESTAMP NOT NULL,
+  token TEXT NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT now(),
+  updated_at TIMESTAMP NOT NULL DEFAULT now(),
   ip_address TEXT,
   user_agent TEXT,
-  user_id TEXT NOT NULL REFERENCES auth_users(id) ON DELETE CASCADE,
-  passkey_verified_at TIMESTAMPTZ
+  user_id TEXT NOT NULL REFERENCES "user"(id) ON DELETE CASCADE,
+  passkey_verified_at TIMESTAMPTZ,
+  CONSTRAINT session_token_unique UNIQUE (token)
 );
-CREATE INDEX IF NOT EXISTS auth_sessions_owner ON auth_sessions(user_id);
+ALTER TABLE "session" ADD COLUMN IF NOT EXISTS passkey_verified_at TIMESTAMPTZ;
+ALTER TABLE "session" ALTER COLUMN updated_at SET DEFAULT now();
+CREATE INDEX IF NOT EXISTS "session_userId_idx" ON "session"(user_id);
 
--- Core schema is retained for compatibility; no password/OAuth endpoints enabled.
-CREATE TABLE IF NOT EXISTS auth_accounts (
+-- Core account shape remains compatible; password/OAuth endpoints are disabled.
+CREATE TABLE IF NOT EXISTS "account" (
   id TEXT PRIMARY KEY,
   account_id TEXT NOT NULL,
   provider_id TEXT NOT NULL,
-  user_id TEXT NOT NULL REFERENCES auth_users(id) ON DELETE CASCADE,
+  user_id TEXT NOT NULL REFERENCES "user"(id) ON DELETE CASCADE,
   access_token TEXT,
   refresh_token TEXT,
   id_token TEXT,
-  access_token_expires_at TIMESTAMPTZ,
-  refresh_token_expires_at TIMESTAMPTZ,
+  access_token_expires_at TIMESTAMP,
+  refresh_token_expires_at TIMESTAMP,
   scope TEXT,
   password TEXT,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  created_at TIMESTAMP NOT NULL DEFAULT now(),
+  updated_at TIMESTAMP NOT NULL DEFAULT now()
 );
-CREATE INDEX IF NOT EXISTS auth_accounts_owner ON auth_accounts(user_id);
+ALTER TABLE "account" ALTER COLUMN updated_at SET DEFAULT now();
+CREATE INDEX IF NOT EXISTS "account_userId_idx" ON "account"(user_id);
 
-CREATE TABLE IF NOT EXISTS auth_verifications (
+CREATE TABLE IF NOT EXISTS "verification" (
   id TEXT PRIMARY KEY,
-  identifier TEXT NOT NULL UNIQUE,
+  identifier TEXT NOT NULL,
   value TEXT NOT NULL,
-  expires_at TIMESTAMPTZ NOT NULL,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  expires_at TIMESTAMP NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT now(),
+  updated_at TIMESTAMP NOT NULL DEFAULT now()
 );
+CREATE INDEX IF NOT EXISTS verification_identifier_idx ON "verification"(identifier);
 
-CREATE TABLE IF NOT EXISTS auth_passkeys (
+CREATE TABLE IF NOT EXISTS "passkey" (
   id TEXT PRIMARY KEY,
   name TEXT,
   public_key TEXT NOT NULL,
-  user_id TEXT NOT NULL REFERENCES auth_users(id) ON DELETE CASCADE,
-  credential_id TEXT NOT NULL UNIQUE,
-  -- WebAuthn signCount is uint32. float8 represents that entire range exactly
-  -- and pg returns it as a JS number; BIGINT would return a string to the client.
-  counter DOUBLE PRECISION NOT NULL CHECK (counter >= 0 AND counter <= 4294967295 AND counter = trunc(counter)),
+  user_id TEXT NOT NULL REFERENCES "user"(id) ON DELETE CASCADE,
+  credential_id TEXT NOT NULL,
+  counter DOUBLE PRECISION NOT NULL,
   device_type TEXT NOT NULL,
   backed_up BOOLEAN NOT NULL,
   transports TEXT,
-  created_at TIMESTAMPTZ,
+  created_at TIMESTAMP,
   aaguid TEXT
 );
-CREATE INDEX IF NOT EXISTS auth_passkeys_owner ON auth_passkeys(user_id);
+-- WebAuthn signCount is uint32: float8 represents the full range exactly and
+-- pg returns a JS number. Main's historical int4 cannot hold its upper half.
+ALTER TABLE "passkey" ALTER COLUMN counter TYPE DOUBLE PRECISION USING counter::DOUBLE PRECISION;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_catalog.pg_constraint
+    WHERE conrelid = format('%I.passkey', current_schema())::regclass
+      AND conname = 'passkey_counter_uint32'
+  ) THEN
+    ALTER TABLE "passkey" ADD CONSTRAINT passkey_counter_uint32
+      CHECK (counter >= 0 AND counter <= 4294967295 AND counter = trunc(counter));
+  END IF;
+END $$;
+CREATE INDEX IF NOT EXISTS "passkey_userId_idx" ON "passkey"(user_id);
+CREATE INDEX IF NOT EXISTS "passkey_credentialID_idx" ON "passkey"(credential_id);
+-- Existing duplicate credentials must fail the upgrade, never be reassigned.
+CREATE UNIQUE INDEX IF NOT EXISTS passkey_credential_id_unique ON "passkey"(credential_id);
 
--- A context cannot designate an account: user_id is generated before the user
--- exists, never accepted from a request, and creates that user only after UV.
+-- Contexts cannot nominate an existing user. No FK is appropriate here: the
+-- server-generated account identity is created only after WebAuthn verification.
 CREATE TABLE IF NOT EXISTS auth_onboarding (
   context_hash TEXT PRIMARY KEY,
   user_id TEXT NOT NULL UNIQUE,
   name TEXT NOT NULL,
+  email TEXT,
   expires_at TIMESTAMPTZ NOT NULL,
   consumed_at TIMESTAMPTZ
 );
+ALTER TABLE auth_onboarding ADD COLUMN IF NOT EXISTS email TEXT;
 CREATE INDEX IF NOT EXISTS auth_onboarding_expiry ON auth_onboarding(expires_at);
 
 CREATE TABLE IF NOT EXISTS ingestion_tokens (
   id TEXT PRIMARY KEY,
-  user_id TEXT NOT NULL REFERENCES auth_users(id) ON DELETE CASCADE,
+  user_id TEXT NOT NULL REFERENCES "user"(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
   token_hash TEXT NOT NULL UNIQUE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),

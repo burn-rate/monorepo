@@ -1,0 +1,108 @@
+/*
+ * burn-rate design tokens — Simpsons donut theme.
+ *
+ * Layer 1 (primitives): the five source colors, named for what they look like.
+ * Layer 2 (semantic): donut-metaphor roles that components reference.
+ *
+ * Derived shades use color-mix() so every token traces back to a source color.
+ * Light shades mix toward white; dark shades mix toward dough (brown) to keep
+ * the palette warm. Dough's own dark shades mix toward black (chocolate).
+ */
+
+:root {
+  /* --- Primitives ------------------------------------------------------- */
+
+  --white: #ffffff;
+  --pink-500: #ff81c1; /* frosting */
+  --yellow-500: #f8db27; /* sprinkles */
+  --brown-500: #9c5b01; /* dough */
+  --blue-500: #2f64d6; /* sky */
+
+  /* Frosting pink */
+  --pink-100: color-mix(in srgb, var(--pink-500) 12%, var(--white));
+  --pink-200: color-mix(in srgb, var(--pink-500) 25%, var(--white));
+  --pink-300: color-mix(in srgb, var(--pink-500) 45%, var(--white));
+  --pink-400: color-mix(in srgb, var(--pink-500) 75%, var(--white));
+  --pink-600: color-mix(in srgb, var(--pink-500) 75%, var(--brown-500));
+  --pink-700: color-mix(in srgb, var(--pink-500) 55%, var(--brown-500));
+  --pink-800: color-mix(in srgb, var(--pink-500) 35%, var(--brown-500));
+
+  /* Sprinkle yellow */
+  --yellow-100: color-mix(in srgb, var(--yellow-500) 12%, var(--white));
+  --yellow-200: color-mix(in srgb, var(--yellow-500) 25%, var(--white));
+  --yellow-300: color-mix(in srgb, var(--yellow-500) 45%, var(--white));
+  --yellow-400: color-mix(in srgb, var(--yellow-500) 75%, var(--white));
+  --yellow-600: color-mix(in srgb, var(--yellow-500) 75%, var(--brown-500));
+  --yellow-700: color-mix(in srgb, var(--yellow-500) 55%, var(--brown-500));
+  --yellow-800: color-mix(in srgb, var(--yellow-500) 35%, var(--brown-500));
+
+  /* Dough brown (dark shades go chocolate via black) */
+  --brown-100: color-mix(in srgb, var(--brown-500) 12%, var(--white));
+  --brown-200: color-mix(in srgb, var(--brown-500) 25%, var(--white));
+  --brown-300: color-mix(in srgb, var(--brown-500) 45%, var(--white));
+  --brown-400: color-mix(in srgb, var(--brown-500) 75%, var(--white));
+  --brown-600: color-mix(in srgb, var(--brown-500) 75%, #000000);
+  --brown-700: color-mix(in srgb, var(--brown-500) 55%, #000000);
+  --brown-800: color-mix(in srgb, var(--brown-500) 35%, #000000);
+
+  /* Sky blue */
+  --blue-100: color-mix(in srgb, var(--blue-500) 12%, var(--white));
+  --blue-200: color-mix(in srgb, var(--blue-500) 25%, var(--white));
+  --blue-300: color-mix(in srgb, var(--blue-500) 45%, var(--white));
+  --blue-400: color-mix(in srgb, var(--blue-500) 75%, var(--white));
+  --blue-600: color-mix(in srgb, var(--blue-500) 75%, var(--brown-500));
+  --blue-700: color-mix(in srgb, var(--blue-500) 55%, var(--brown-500));
+  --blue-800: color-mix(in srgb, var(--blue-500) 35%, var(--brown-500));
+
+  /* --- Semantic: surfaces & lines --------------------------------------- */
+
+  --color-bg: var(--white);
+  --color-surface: var(--white);
+  --color-glaze: var(--yellow-100); /* faint buttery tint for alternate surfaces */
+  --color-crust: var(--brown-200); /* borders */
+  --color-crust-strong: var(--brown-300); /* emphasized borders */
+
+  /* --- Semantic: text (warm dough tones instead of harsh black) --------- */
+
+  --color-text: var(--brown-700);
+  --color-text-muted: var(--brown-500);
+  --color-text-faint: var(--brown-300);
+
+  /* --- Semantic: frosting (primary brand) -------------------------------- */
+
+  --color-frosting: var(--pink-500);
+  --color-frosting-strong: var(--pink-600); /* hover / pressed */
+  --color-frosting-soft: var(--pink-100); /* subtle backgrounds */
+  --color-on-frosting: var(--brown-700); /* readable text on pink */
+
+  /* --- Semantic: sprinkles (accent) -------------------------------------- */
+
+  --color-sprinkles: var(--yellow-500);
+  --color-sprinkles-strong: var(--yellow-600); /* hover / pressed */
+  --color-sprinkles-soft: var(--yellow-100); /* subtle backgrounds */
+  --color-on-sprinkles: var(--brown-700); /* readable text on yellow */
+
+  /* --- Semantic: sky (info & links) -------------------------------------- */
+
+  --color-sky: var(--blue-500);
+  --color-sky-strong: var(--blue-600); /* hover / pressed */
+  --color-sky-soft: var(--blue-100); /* subtle backgrounds */
+  --color-on-sky: var(--white); /* readable text on blue */
+
+  /* --- Shape: donuts are round ------------------------------------------- */
+
+  --radius-sprinkle: 6px; /* small elements: inputs, chips */
+  --radius-doughnut: 24px; /* cards and panels */
+  --radius-hole: 999px; /* pills, avatars, circles */
+
+  /* --- Depth: brown-tinted shadows --------------------------------------- */
+
+  --shadow-sprinkle: 0 1px 3px color-mix(in srgb, var(--brown-500) 25%, transparent);
+  --shadow-donut: 0 4px 16px color-mix(in srgb, var(--brown-500) 18%, transparent);
+
+  /* --- Type --------------------------------------------------------------- */
+
+  --font-sans:
+    system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+}

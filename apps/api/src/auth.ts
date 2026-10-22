@@ -5,6 +5,7 @@ import { Kysely, PostgresDialect, type PostgresPool } from 'kysely';
 import type { Sql } from './db';
 import { AuthError, assertTrustedMutation, readAuthConfig, type AuthEnvironment } from './auth-config';
 import { hashToken, requireFreshPasskey } from './tokens';
+import { passkeySignupContextSchema } from '@burn-rate/db/auth-context';
 
 export type { AuthEnvironment } from './auth-config';
 export { AuthError, assertTrustedMutation, readAuthConfig } from './auth-config';
@@ -15,12 +16,12 @@ export interface AuthSession {
 }
 
 const ONBOARDING_TTL = 5 * 60 * 1000;
-type OnboardingRow = { user_id: string; name: string; expires_at: Date };
+type OnboardingRow = { user_id: string; name: string; email: string | null; expires_at: Date };
 
 async function resolveOnboarding(sql: Sql, context: string | null | undefined): Promise<OnboardingRow> {
   if (!context || !/^[a-f0-9]{64}$/.test(context)) throw new APIError('BAD_REQUEST', { code: 'INVALID_ONBOARDING_CONTEXT', message: 'Start a new passkey registration.' });
   const result = await sql.query<OnboardingRow>(
-    'SELECT user_id, name, expires_at FROM auth_onboarding WHERE context_hash = $1 AND consumed_at IS NULL AND expires_at > now()',
+    'SELECT user_id, name, email, expires_at FROM auth_onboarding WHERE context_hash = $1 AND consumed_at IS NULL AND expires_at > now()',
     [await hashToken(context)]
   );
   if (!result.rows[0]) throw new APIError('BAD_REQUEST', { code: 'INVALID_ONBOARDING_CONTEXT', message: 'Start a new passkey registration.' });
@@ -42,7 +43,7 @@ export function createAuth(sql: Sql, env: AuthEnvironment) {
     rpName: config.rpName,
     origin: config.passkeyOrigins,
     authenticatorSelection: { residentKey: 'required', userVerification: 'required' },
-    schema: { passkey: { modelName: 'auth_passkeys', fields: {
+    schema: { passkey: { modelName: 'passkey', fields: {
       publicKey: 'public_key', userId: 'user_id', credentialID: 'credential_id', deviceType: 'device_type', backedUp: 'backed_up', createdAt: 'created_at'
     } } },
     registration: {
@@ -59,17 +60,23 @@ export function createAuth(sql: Sql, env: AuthEnvironment) {
         if (session) return { userId: session.user.id };
         const onboarding = await resolveOnboarding(sql, context);
         if (onboarding.user_id !== user.id) throw new APIError('BAD_REQUEST', { code: 'INVALID_ONBOARDING_CONTEXT', message: 'Start a new passkey registration.' });
+        const email = onboarding.email ?? `${user.id}@accounts.invalid`;
+        // Serialize create-only email claims across separate registrations.
+        // The canonical unique email constraint remains the final race guard.
+        await sql.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [`signup-email:${email}`]);
+        const existing = await sql.query('SELECT id FROM "user" WHERE lower(email) = $1', [email]);
+        if (existing.rows.length) throw new APIError('BAD_REQUEST', { code: 'ACCOUNT_ALREADY_EXISTS', message: 'An account already exists. Sign in with its passkey.' });
         // createSession:true makes this hook, credential insert, and session insert
         // one Better Auth/Kysely transaction on the same request-scoped client.
         const consumed = await sql.query<OnboardingRow>(
-          'UPDATE auth_onboarding SET consumed_at = now() WHERE context_hash = $1 AND user_id = $2 AND consumed_at IS NULL AND expires_at > now() RETURNING user_id, name, expires_at',
+          'UPDATE auth_onboarding SET consumed_at = now() WHERE context_hash = $1 AND user_id = $2 AND consumed_at IS NULL AND expires_at > now() RETURNING user_id, name, email, expires_at',
           [await hashToken(context!), user.id]
         );
         if (consumed.rowCount !== 1) throw new APIError('BAD_REQUEST', { code: 'INVALID_ONBOARDING_CONTEXT', message: 'Start a new passkey registration.' });
         const created = await ctx.context.internalAdapter.createUser({
           id: user.id,
           name: onboarding.name,
-          email: `${user.id}@accounts.invalid`,
+          email,
           emailVerified: false
         }, { method: 'passkey' });
         return { userId: created.id };
@@ -93,17 +100,17 @@ export function createAuth(sql: Sql, env: AuthEnvironment) {
     trustedOrigins: config.trustedOrigins,
     emailAndPassword: { enabled: false },
     socialProviders: {},
-    user: { modelName: 'auth_users', fields: { emailVerified: 'email_verified', createdAt: 'created_at', updatedAt: 'updated_at' } },
+    user: { modelName: 'user', fields: { emailVerified: 'email_verified', createdAt: 'created_at', updatedAt: 'updated_at' } },
     session: {
-      modelName: 'auth_sessions',
+      modelName: 'session',
       fields: { userId: 'user_id', expiresAt: 'expires_at', createdAt: 'created_at', updatedAt: 'updated_at', ipAddress: 'ip_address', userAgent: 'user_agent' },
       expiresIn: 7 * 24 * 60 * 60,
       freshAge: 5 * 60,
       cookieCache: { enabled: false },
       additionalFields: { passkeyVerifiedAt: { type: 'date', required: false, input: false, fieldName: 'passkey_verified_at' } }
     },
-    account: { modelName: 'auth_accounts', fields: { accountId: 'account_id', providerId: 'provider_id', userId: 'user_id', accessToken: 'access_token', refreshToken: 'refresh_token', idToken: 'id_token', accessTokenExpiresAt: 'access_token_expires_at', refreshTokenExpiresAt: 'refresh_token_expires_at', createdAt: 'created_at', updatedAt: 'updated_at' } },
-    verification: { modelName: 'auth_verifications', fields: { expiresAt: 'expires_at', createdAt: 'created_at', updatedAt: 'updated_at' } },
+    account: { modelName: 'account', fields: { accountId: 'account_id', providerId: 'provider_id', userId: 'user_id', accessToken: 'access_token', refreshToken: 'refresh_token', idToken: 'id_token', accessTokenExpiresAt: 'access_token_expires_at', refreshTokenExpiresAt: 'refresh_token_expires_at', createdAt: 'created_at', updatedAt: 'updated_at' } },
+    verification: { modelName: 'verification', fields: { expiresAt: 'expires_at', createdAt: 'created_at', updatedAt: 'updated_at' } },
     advanced: { useSecureCookies: config.secureCookies, defaultCookieAttributes: { httpOnly: true, secure: config.secureCookies, sameSite: config.sameSite } },
     databaseHooks: { session: { create: { before: async (session) => ({ data: { ...session, passkeyVerifiedAt: new Date() } }) } } },
     hooks: { before: createAuthMiddleware(async (ctx) => {
@@ -127,12 +134,12 @@ export async function getAuthSession(sql: Sql, env: AuthEnvironment, headers: He
   return result as AuthSession;
 }
 
-export async function createOnboardingContext(sql: Sql, name = 'Burn Rate user'): Promise<{ context: string; expiresAt: string }> {
+export async function createOnboardingContext(sql: Sql, name = 'Burn Rate user', email?: string): Promise<{ context: string; expiresAt: string }> {
   const context = Array.from(crypto.getRandomValues(new Uint8Array(32)), (byte) => byte.toString(16).padStart(2, '0')).join('');
   const expiresAt = new Date(Date.now() + ONBOARDING_TTL);
   // Bound expired/consumed context retention without creating incomplete users.
   await sql.query('DELETE FROM auth_onboarding WHERE expires_at < now()');
-  await sql.query('INSERT INTO auth_onboarding (context_hash, user_id, name, expires_at) VALUES ($1, $2, $3, $4)', [await hashToken(context), crypto.randomUUID(), name, expiresAt]);
+  await sql.query('INSERT INTO auth_onboarding (context_hash, user_id, name, email, expires_at) VALUES ($1, $2, $3, $4, $5)', [await hashToken(context), crypto.randomUUID(), name, email ?? null, expiresAt]);
   return { context, expiresAt: expiresAt.toISOString() };
 }
 
@@ -142,11 +149,11 @@ export async function removePasskey(sql: Sql, session: AuthSession, id: string):
   try {
     // Serialize all key removals for this owner, including two simultaneous
     // requests targeting different keys. A row count alone is not sufficient.
-    await sql.query('SELECT id FROM auth_users WHERE id = $1 FOR UPDATE', [session.user.id]);
-    const keys = await sql.query<{ id: string }>('SELECT id FROM auth_passkeys WHERE user_id = $1', [session.user.id]);
+    await sql.query('SELECT id FROM "user" WHERE id = $1 FOR UPDATE', [session.user.id]);
+    const keys = await sql.query<{ id: string }>('SELECT id FROM "passkey" WHERE user_id = $1', [session.user.id]);
     if (!keys.rows.some((key) => key.id === id)) throw new AuthError(404, 'PASSKEY_NOT_FOUND', 'Passkey not found.');
     if (keys.rows.length < 2) throw new AuthError(409, 'LAST_PASSKEY', 'Add another passkey before removing this one.');
-    await sql.query('DELETE FROM auth_passkeys WHERE id = $1 AND user_id = $2', [id, session.user.id]);
+    await sql.query('DELETE FROM "passkey" WHERE id = $1 AND user_id = $2', [id, session.user.id]);
     await sql.query('COMMIT');
   } catch (error) {
     await sql.query('ROLLBACK');
@@ -161,9 +168,16 @@ export async function handleAuthRequest(request: Request, sql: Sql, env: AuthEnv
   assertTrustedMutation(request, config);
   const path = new URL(request.url).pathname.slice('/api/auth'.length);
   if (path === '/onboarding/context' && request.method === 'POST') {
-    const body = await request.json().catch(() => null) as { name?: unknown } | null;
-    if (!body || (body.name !== undefined && (typeof body.name !== 'string' || !body.name.trim() || body.name.length > 100))) throw new AuthError(400, 'INVALID_NAME', 'Provide a name between 1 and 100 characters.');
-    return Response.json(await createOnboardingContext(sql, typeof body.name === 'string' ? body.name.trim() : undefined), { headers: { 'Cache-Control': 'no-store' } });
+    const body = await request.json().catch(() => null) as { name?: unknown; email?: unknown } | null;
+    if (!body || Array.isArray(body) || typeof body !== 'object' || (body.name !== undefined && (typeof body.name !== 'string' || !body.name.trim() || body.name.length > 100))) throw new AuthError(400, 'INVALID_NAME', 'Provide a name between 1 and 100 characters.');
+    let email: string | undefined;
+    if (body.email !== undefined) {
+      const parsed = passkeySignupContextSchema.safeParse({ email: body.email, name: body.name });
+      if (!parsed.success) throw new AuthError(400, 'INVALID_EMAIL', 'Provide a valid email address.');
+      email = parsed.data.email;
+    }
+    const name = typeof body.name === 'string' ? body.name.trim() : email?.split('@')[0] ?? 'Burn Rate user';
+    return Response.json(await createOnboardingContext(sql, name, email), { headers: { 'Cache-Control': 'no-store' } });
   }
   if (path === '/passkey/delete-passkey' && request.method === 'POST') {
     const session = await getAuthSession(sql, env, request.headers);

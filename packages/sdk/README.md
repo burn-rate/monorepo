@@ -11,7 +11,7 @@ needed. Tool versions are pinned in the root/API package manifests and lockfile.
 import { createClient, createConfig, listHealthSamples } from '@burn-rate/sdk';
 
 const client = createClient(createConfig({
-  baseUrl: 'https://api.your-configured-domain.example',
+  baseUrl: 'https://api.burn-rate-app.workers.dev',
   credentials: 'include',
   fetch: globalThis.fetch,
 }));
@@ -31,7 +31,15 @@ operations require the Better Auth session cookie. Configure API origin, RP ID,
 cookie topology, and Better Auth trusted origins together before registering
 production passkeys. Browser WebAuthn onboarding, sign-in, and credential
 management use Better Auth's `passkeyClient`, not this generated SDK. There is
-no email/password recovery path. Token creation and passkey removal require
+no password or email recovery path. The dashboard posts `{ email, name }` to
+`/api/auth/onboarding/context` with credentials included and supplies the
+returned opaque context to `addPasskey({ context, createSession: true })`.
+Email is persisted only after verified registration; unsigned JSON context is
+rejected. Production uses dashboard `https://app.burn-rate-app.workers.dev`,
+API `https://api.burn-rate-app.workers.dev`, and RP ID
+`burn-rate-app.workers.dev`. Canonical API settings are `BETTER_AUTH_URL`,
+`DASHBOARD_URL`, and secret `BETTER_AUTH_SECRET`; the dashboard's public
+`API_URL` points to the API origin. Token creation and passkey removal require
 passkey verification within five minutes; keep at least one usable passkey.
 
 For SSR, construct a new client for each incoming request. Configure a fixed,

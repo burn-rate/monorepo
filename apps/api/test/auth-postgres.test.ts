@@ -19,11 +19,11 @@ describe.runIf(Boolean(process.env.TEST_DATABASE_URL))('PostgreSQL independent-c
       await control.query(`CREATE SCHEMA "${schema}"`);
       await Promise.all(clients.map(client => client.query(`SET search_path TO "${schema}"`)));
       await control.query(await readFile(new NodeURL('../timescale/004_auth.sql', import.meta.url), 'utf8'));
-      await control.query("INSERT INTO auth_users (id,name,email) VALUES ('owner','Test owner','test@accounts.invalid')");
-      await control.query(`INSERT INTO auth_passkeys (id,user_id,credential_id,public_key,counter,device_type,backed_up)
+      await control.query(`INSERT INTO "user" (id,name,email) VALUES ('owner','Test owner','test@accounts.invalid')`);
+      await control.query(`INSERT INTO passkey (id,user_id,credential_id,public_key,counter,device_type,backed_up)
         VALUES ('first','owner','credential-first','public-first',0,'singleDevice',false),
                ('second','owner','credential-second','public-second',4294967295,'singleDevice',false)`);
-      const counters = (await control.query<{ counter: number }>('SELECT counter FROM auth_passkeys ORDER BY id')).rows;
+      const counters = (await control.query<{ counter: number }>('SELECT counter FROM passkey ORDER BY id')).rows;
       expect(counters.map(row => typeof row.counter)).toEqual(['number', 'number']);
       expect(counters.map(row => row.counter)).toEqual([0, 4294967295]);
       const firstPid = (await first.query<{ pid: number }>('SELECT pg_backend_pid() AS pid')).rows[0].pid;
@@ -34,7 +34,7 @@ describe.runIf(Boolean(process.env.TEST_DATABASE_URL))('PostgreSQL independent-c
       // Hold the owner row so both operations are provably contending before
       // releasing them. This fails if the implementation omits the owner lock.
       await control.query('BEGIN');
-      await control.query("SELECT id FROM auth_users WHERE id='owner' FOR UPDATE");
+      await control.query(`SELECT id FROM "user" WHERE id='owner' FOR UPDATE`);
       locked = true;
       pending = Promise.allSettled([removePasskey(first, session, 'first'), removePasskey(second, session, 'second')]);
       let bothBlocked = false;
@@ -54,7 +54,7 @@ describe.runIf(Boolean(process.env.TEST_DATABASE_URL))('PostgreSQL independent-c
       expect(operations.filter(operation => operation.status === 'fulfilled')).toHaveLength(1);
       const rejected = operations.find(operation => operation.status === 'rejected') as PromiseRejectedResult;
       expect(rejected.reason).toMatchObject({ code: 'LAST_PASSKEY' });
-      expect((await control.query('SELECT id FROM auth_passkeys WHERE user_id=$1', ['owner'])).rows).toHaveLength(1);
+      expect((await control.query('SELECT id FROM passkey WHERE user_id=$1', ['owner'])).rows).toHaveLength(1);
     } finally {
       if (locked) await control.query('ROLLBACK').catch(() => {});
       if (pending && !operations) await pending;

@@ -7,12 +7,12 @@ import { readAuthConfig, assertTrustedMutation } from '../src/auth-config';
 import { authenticateIngestionToken, createIngestionToken, listIngestionTokens, requireFreshPasskey, revokeIngestionToken } from '../src/tokens';
 import type { Sql } from '../src/db';
 
-const env: AuthEnvironment = {
-  AUTH_SECRET: 'test-only-secret-with-over-thirty-two-characters',
-  AUTH_BASE_URL: 'https://api.example.com',
-  DASHBOARD_ORIGINS: '["https://app.example.com"]',
+const env = {
+  BETTER_AUTH_SECRET: 'test-only-secret-with-over-thirty-two-characters',
+  BETTER_AUTH_URL: 'https://api.example.com',
+  DASHBOARD_URL: 'https://app.example.com',
   PASSKEY_RP_ID: 'example.com', PASSKEY_RP_NAME: 'Burn Rate tests'
-};
+} satisfies AuthEnvironment;
 const origin = 'https://app.example.com';
 const encoder = new TextEncoder();
 const bytes = (...arrays: Uint8Array[]) => new Uint8Array(arrays.reduce((result, array) => [...result, ...array], [] as number[]));
@@ -66,19 +66,22 @@ describe('passkey-only Better Auth on the shared PostgreSQL client', () => {
     db = new PGlite();
     await db.exec(await readFile(new NodeURL('../timescale/004_auth.sql', import.meta.url), 'utf8'));
     sql = { query: async (query: string, params?: unknown[]) => {
+      // PGlite has one backend; independent-client advisory locking is checked
+      // by the optional real PostgreSQL suite. All other SQL executes normally.
+      if (query.startsWith('SELECT pg_advisory_xact_lock')) return { rows: [], rowCount: 0 };
       const result = await db.query(query, params);
       return { rows: result.rows, rowCount: result.affectedRows ?? result.rows.length, command: query.trim().split(/\s/)[0].toUpperCase() };
     } } as unknown as Sql;
   }, 30_000);
   beforeEach(async () => {
-    await db.exec('TRUNCATE auth_users, auth_sessions, auth_accounts, auth_passkeys, auth_verifications, auth_onboarding, ingestion_tokens CASCADE');
+    await db.exec('TRUNCATE "user", session, account, passkey, verification, auth_onboarding, ingestion_tokens CASCADE');
     cookies = new Map();
   });
   afterAll(async () => { await db?.close(); });
 
   const cookieHeader = () => [...cookies].map(([key, value]) => `${key}=${value}`).join('; ');
   async function request(path: string, body?: unknown, requestOrigin = origin) {
-    const response = await handleAuthRequest(new Request(`${env.AUTH_BASE_URL}/api/auth${path}`, {
+    const response = await handleAuthRequest(new Request(`${env.BETTER_AUTH_URL}/api/auth${path}`, {
       method: body === undefined ? 'GET' : 'POST', headers: { Origin: requestOrigin, Cookie: cookieHeader(), ...(body === undefined ? {} : { 'Content-Type': 'application/json' }) }, body: body === undefined ? undefined : JSON.stringify(body)
     }), sql, env);
     for (const set of response.headers.getSetCookie()) {
@@ -88,8 +91,8 @@ describe('passkey-only Better Auth on the shared PostgreSQL client', () => {
     }
     return response;
   }
-  async function begin() {
-    const context = await (await request('/onboarding/context', { name: 'Test user' })).json() as { context: string };
+  async function begin(input: { name?: string; email?: string } = { name: 'Test user' }) {
+    const context = await (await request('/onboarding/context', input)).json() as { context: string };
     const options = await (await request(`/passkey/generate-register-options?context=${context.context}`)).json() as { challenge: string; authenticatorSelection: { userVerification: string } };
     return { ...context, ...options };
   }
@@ -107,10 +110,10 @@ describe('passkey-only Better Auth on the shared PostgreSQL client', () => {
 
   it('creates no account on abandoned onboarding; successful UV registration creates user, key, session atomically', async () => {
     await begin();
-    expect((await db.query('SELECT * FROM auth_users')).rows).toHaveLength(0);
+    expect((await db.query('SELECT * FROM "user"')).rows).toHaveLength(0);
     await register();
-    expect((await db.query('SELECT * FROM auth_users')).rows).toHaveLength(1);
-    expect((await db.query('SELECT * FROM auth_passkeys')).rows).toHaveLength(1);
+    expect((await db.query('SELECT * FROM "user"')).rows).toHaveLength(1);
+    expect((await db.query('SELECT * FROM passkey')).rows).toHaveLength(1);
     const session = await getAuthSession(sql, env, new Headers({ Cookie: cookieHeader() }));
     expect(session?.user.name).toBe('Test user');
     expect(session?.session.passkeyVerifiedAt).toBeInstanceOf(Date);
@@ -120,12 +123,45 @@ describe('passkey-only Better Auth on the shared PostgreSQL client', () => {
   });
 
   it('requires UV even though the upstream verifier permits ceremonies without it', async () => {
-    const start = await begin();
+    const start = await begin({ name: 'No verification', email: 'unverified@example.com' });
     const key = await credential();
     const response = await request('/passkey/verify-registration', { response: await key.registration(start.challenge, origin, false), createSession: true });
     expect(response.status).toBe(403);
-    expect((await db.query('SELECT * FROM auth_users')).rows).toHaveLength(0);
-    expect((await db.query('SELECT * FROM auth_passkeys')).rows).toHaveLength(0);
+    expect((await db.query('SELECT * FROM "user"')).rows).toHaveLength(0);
+    expect((await db.query('SELECT * FROM passkey')).rows).toHaveLength(0);
+  });
+
+  it('preserves a requested email only after a valid ceremony without treating it as a verified recovery address', async () => {
+    const start = await begin({ name: 'Email owner', email: '  Owner@Example.com  ' });
+    expect((await db.query('SELECT * FROM "user"')).rows).toHaveLength(0);
+    const key = await credential();
+    const response = await request('/passkey/verify-registration', { response: await key.registration(start.challenge), createSession: true });
+    expect(response.status, await response.clone().text()).toBe(200);
+    const users = (await db.query<{ email: string; name: string; email_verified: boolean }>('SELECT email,name,email_verified FROM "user"')).rows;
+    expect(users).toEqual([{ email: 'owner@example.com', name: 'Email owner', email_verified: false }]);
+    expect((await db.query('SELECT * FROM passkey')).rows).toHaveLength(1);
+    expect(await getAuthSession(sql, env, new Headers({ Cookie: cookieHeader() }))).not.toBeNull();
+    await expect(request('/onboarding/context', { email: 'invalid-address' })).rejects.toMatchObject({ code: 'INVALID_EMAIL' });
+  });
+
+  it('rejects existing-email claims, including contexts issued before the first account completed signup', async () => {
+    const first = await begin({ name: 'First owner', email: 'claim@example.com' });
+    const firstCookies = new Map(cookies);
+    const competing = await begin({ name: 'Other claimant', email: 'CLAIM@example.com' });
+    const competingCookies = new Map(cookies);
+    const firstKey = await credential(), competingKey = await credential();
+    cookies = firstCookies;
+    expect((await request('/passkey/verify-registration', { response: await firstKey.registration(first.challenge), createSession: true })).status).toBe(200);
+    cookies = competingCookies;
+    const rejected = await request('/passkey/verify-registration', { response: await competingKey.registration(competing.challenge), createSession: true });
+    expect(rejected.status).toBe(400);
+    expect(await rejected.json()).toMatchObject({ code: 'ACCOUNT_ALREADY_EXISTS' });
+    expect((await db.query('SELECT name,email FROM "user"')).rows).toEqual([{ name: 'First owner', email: 'claim@example.com' }]);
+    expect((await db.query('SELECT * FROM passkey')).rows).toHaveLength(1);
+    expect((await db.query('SELECT * FROM session')).rows).toHaveLength(1);
+    expect(await getAuthSession(sql, env, new Headers({ Cookie: cookieHeader() }))).toBeNull();
+    const unsigned = JSON.stringify({ name: 'Impersonator', email: 'claim@example.com' });
+    expect((await request(`/passkey/generate-register-options?context=${encodeURIComponent(unsigned)}`)).ok).toBe(false);
   });
 
   it('rejects replayed, expired, and foreign-origin registration challenges without creating users', async () => {
@@ -135,22 +171,22 @@ describe('passkey-only Better Auth on the shared PostgreSQL client', () => {
     expect((await request('/passkey/verify-registration', payload)).ok).toBe(false);
     expect((await request('/passkey/verify-registration', { response: await key.registration(start.challenge), createSession: true })).ok).toBe(false);
     const fresh = await begin();
-    await db.exec("UPDATE auth_verifications SET expires_at = now() - interval '1 minute'");
+    await db.exec("UPDATE verification SET expires_at = now() - interval '1 minute'");
     expect((await request('/passkey/verify-registration', { response: await key.registration(fresh.challenge), createSession: true })).ok).toBe(false);
     const wrongRP = await begin();
     expect((await request('/passkey/verify-registration', { response: await key.registration(wrongRP.challenge, origin, true, 'evil.example'), createSession: true })).ok).toBe(false);
-    expect((await db.query('SELECT * FROM auth_users')).rows).toHaveLength(0);
+    expect((await db.query('SELECT * FROM "user"')).rows).toHaveLength(0);
   });
 
   it('context cannot nominate an existing account or create a user without createSession:true', async () => {
     await register();
-    const user = (await db.query<{ id: string }>('SELECT id FROM auth_users')).rows[0];
+    const user = (await db.query<{ id: string }>('SELECT id FROM "user"')).rows[0];
     cookies.clear();
     expect((await request(`/passkey/generate-register-options?context=${user.id}`)).ok).toBe(false);
     const start = await begin();
     const key = await credential();
     expect((await request('/passkey/verify-registration', { response: await key.registration(start.challenge) })).status).toBe(400);
-    expect((await db.query('SELECT * FROM auth_users')).rows).toHaveLength(1);
+    expect((await db.query('SELECT * FROM "user"')).rows).toHaveLength(1);
   });
 
   it('consumes successful context and rolls back user/context writes if credential persistence fails', async () => {
@@ -163,8 +199,8 @@ describe('passkey-only Better Auth on the shared PostgreSQL client', () => {
     // A valid registration carrying an already registered credential must fail
     // its unique constraint after the hook attempted to create a second user.
     expect((await request('/passkey/verify-registration', { response: await key.registration(another.challenge), createSession: true })).ok).toBe(false);
-    expect((await db.query('SELECT * FROM auth_users')).rows).toHaveLength(1);
-    expect((await db.query('SELECT * FROM auth_passkeys')).rows).toHaveLength(1);
+    expect((await db.query('SELECT * FROM "user"')).rows).toHaveLength(1);
+    expect((await db.query('SELECT * FROM passkey')).rows).toHaveLength(1);
     const row = (await db.query<{ consumed_at: Date | null }>('SELECT consumed_at FROM auth_onboarding WHERE context_hash = (SELECT context_hash FROM auth_onboarding WHERE consumed_at IS NULL LIMIT 1)')).rows[0];
     expect(row.consumed_at).toBeNull();
   });
@@ -179,21 +215,21 @@ describe('passkey-only Better Auth on the shared PostgreSQL client', () => {
     const next = await (await request('/passkey/generate-authenticate-options')).json() as { challenge: string };
     expect((await request('/passkey/verify-authentication', { response: await key.authentication(next.challenge) })).status).toBe(200);
     expect(await getAuthSession(sql, env, new Headers({ Cookie: cookieHeader() }))).not.toBeNull();
-    await db.exec("UPDATE auth_sessions SET expires_at = now() - interval '1 minute'");
+    await db.exec("UPDATE session SET expires_at = now() - interval '1 minute'");
     expect(await getAuthSession(sql, env, new Headers({ Cookie: cookieHeader() }))).toBeNull();
   });
 
   it('supports owner-only passkey addition/removal and keeps the final credential', async () => {
     await register();
     const session = (await getAuthSession(sql, env, new Headers({ Cookie: cookieHeader() })))!;
-    const first = (await db.query<{ id: string }>('SELECT id FROM auth_passkeys')).rows[0].id;
+    const first = (await db.query<{ id: string }>('SELECT id FROM passkey')).rows[0].id;
     await expect(removePasskey(sql, session, first)).rejects.toMatchObject({ code: 'LAST_PASSKEY' });
     const start = await (await request('/passkey/generate-register-options')).json() as { challenge: string };
     const second = await credential();
     expect((await request('/passkey/verify-registration', { response: await second.registration(start.challenge), createSession: true })).status).toBe(200);
     await expect(removePasskey(sql, session, 'foreign-or-missing')).rejects.toMatchObject({ status: 404 });
     await removePasskey(sql, session, first);
-    expect((await db.query('SELECT * FROM auth_passkeys')).rows).toHaveLength(1);
+    expect((await db.query('SELECT * FROM passkey')).rows).toHaveLength(1);
     await expect(removePasskey(sql, { ...session, session: { ...session.session, passkeyVerifiedAt: new Date(Date.now() - 301_000) } }, first)).rejects.toMatchObject({ code: 'PASSKEY_VERIFICATION_REQUIRED' });
   });
 
@@ -213,14 +249,24 @@ describe('passkey-only Better Auth on the shared PostgreSQL client', () => {
 });
 
 describe('auth deployment and freshness boundary', () => {
+  it('supports canonical deployment names and explicit legacy aliases with canonical precedence', () => {
+    const canonical = readAuthConfig(env);
+    const legacy = readAuthConfig({ AUTH_SECRET: env.BETTER_AUTH_SECRET, AUTH_BASE_URL: env.BETTER_AUTH_URL,
+      DASHBOARD_ORIGINS: JSON.stringify([env.DASHBOARD_URL]), PASSKEY_RP_ID: env.PASSKEY_RP_ID, PASSKEY_RP_NAME: env.PASSKEY_RP_NAME });
+    expect(legacy).toEqual(canonical);
+    expect(readAuthConfig({ ...env, AUTH_SECRET: 'ignored', AUTH_BASE_URL: 'https://wrong.example', DASHBOARD_ORIGINS: '["https://wrong.example"]' })).toEqual(canonical);
+    expect(() => readAuthConfig({ ...env, BETTER_AUTH_SECRET: '', AUTH_SECRET: env.BETTER_AUTH_SECRET })).toThrow();
+    expect(() => readAuthConfig({ ...env, PASSKEY_RP_ID: undefined })).toThrow();
+    expect(() => readAuthConfig({ ...env, PASSKEY_RP_NAME: undefined })).toThrow();
+  });
   it('uses exact origins, production secure cookies, and validates RP and secret config', () => {
     const config = readAuthConfig(env);
     expect(config.secureCookies).toBe(true);
-    expect(() => assertTrustedMutation(new Request(env.AUTH_BASE_URL, { method: 'POST', headers: { Origin: origin } }), config)).not.toThrow();
-    expect(() => assertTrustedMutation(new Request(env.AUTH_BASE_URL, { method: 'POST', headers: { Origin: 'https://evil.example' } }), config)).toThrow();
-    expect(() => assertTrustedMutation(new Request(env.AUTH_BASE_URL, { method: 'POST' }), config)).toThrow();
+    expect(() => assertTrustedMutation(new Request(env.BETTER_AUTH_URL, { method: 'POST', headers: { Origin: origin } }), config)).not.toThrow();
+    expect(() => assertTrustedMutation(new Request(env.BETTER_AUTH_URL, { method: 'POST', headers: { Origin: 'https://evil.example' } }), config)).toThrow();
+    expect(() => assertTrustedMutation(new Request(env.BETTER_AUTH_URL, { method: 'POST' }), config)).toThrow();
     expect(() => readAuthConfig({ ...env, PASSKEY_RP_ID: 'other.example' })).toThrow();
-    expect(() => readAuthConfig({ ...env, AUTH_SECRET: 'short' })).toThrow();
+    expect(() => readAuthConfig({ ...env, BETTER_AUTH_SECRET: 'short' })).toThrow();
   });
   it('requires proof in the preceding five minutes rather than merely an active session', () => {
     const session = { user: { id: 'owner', name: 'Owner' }, session: { id: 'session', createdAt: new Date(), expiresAt: new Date(Date.now() + 60_000) } } satisfies AuthSession;

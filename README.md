@@ -9,6 +9,7 @@ apps/
   marketing/    Static Astro marketing site
 packages/
   api-schema/   Shared Zod schemas and inferred TypeScript API types
+  db/           Shared Postgres client and Drizzle schema metadata
   sdk/          Generated Hey API client and request-scoped Fetch helpers
   design-tokens/ Simpsons donut theme: CSS custom properties and TS tokens
 ```
@@ -65,6 +66,29 @@ External timeseries data is normalized and stored in TimescaleDB (Tiger Cloud se
 D1 is not used — TimescaleDB/Postgres is the single application database, and
 the former D1 binding has been removed from the Worker configuration.
 
+## Authentication
+
+Auth is **passkey-only** (WebAuthn, no passwords), powered by [Better Auth](https://better-auth.com) with the `@better-auth/passkey` plugin. The auth server lives in the API and mounts Better Auth at `/api/auth/*`; the dashboard talks to it cross-origin with `createAuthClient` from `better-auth/svelte`.
+
+- **Sign-up**: the dashboard posts `{ email, name }` to `/api/auth/onboarding/context` with credentials included, then passes the server-issued opaque context to `authClient.passkey.addPasskey({ context, createSession: true })`. Account creation and email persistence occur only after successful user-verified WebAuthn registration. Client-authored JSON cannot nominate an account or replace the server-issued context.
+- **Sign-in**: `authClient.signIn.passkey()` against the same account. Email is an account label, not a password or recovery method.
+- **Storage**: canonical Better Auth tables (`user`, `session`, `account`, `verification`, `passkey`) live in the same TimescaleDB/Postgres database, alongside server-owned onboarding and ingestion-token records. The API and operator tools reuse the client from `@burn-rate/db`.
+
+The checksummed API runner is the single migration entry point for fresh and
+existing databases. `pnpm db:migrate` applies the metric registry, encrypted
+storage, canonical auth schema/upgrades, and rate limits. The package-level
+`pnpm --filter @burn-rate/db db:migrate` forwards to this runner. Historical
+Drizzle migration files remain unchanged; `db:generate` creates offline schema
+metadata for review rather than applying a second migration history.
+
+Canonical Worker inputs are secret `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`,
+and `DASHBOARD_URL`; legacy `AUTH_SECRET`, `AUTH_BASE_URL`, and JSON
+`DASHBOARD_ORIGINS` aliases remain supported. The dashboard uses public
+`API_URL` (see `apps/dashboard/.env.example`). Local origins are
+`http://localhost:8787` and `http://localhost:5173`, with RP ID `localhost`.
+Production origins and RP ID are listed below. Configure them consistently
+before enrolling passkeys, whose credentials remain bound to their RP ID.
+
 ## Timeseries database
 
 Schema lives in `apps/api/timescale/`. Fresh initialization creates the metric
@@ -116,6 +140,20 @@ For local development, copy `.dev.vars.example` to `.dev.vars` and set `CLOUDFLA
 
 Use `pnpm --filter @burn-rate/api test` for the mapping and backend integration suite. The tests use embedded Postgres and cryptographic WebAuthn fixtures; real-device staging and representative Timescale migration/policy checks remain part of rollout.
 
-The dashboard uses SvelteKit's automatic adapter until a hosting target is selected. The marketing site builds to static files. Cloud resources are configured separately from the local build.
+The dashboard uses SvelteKit's Cloudflare adapter and deploys as Worker `app`; the API deploys as Worker `api`. The marketing site builds to static files. Cloud resources are configured separately from the local build.
+
+## Deployment
+
+Both apps deploy to Cloudflare Workers in the `Burn Rate` account (`888e…`) on push to `main` via `.github/workflows/deploy.yml`. Database migrations run before API deployment; dashboard deployment waits for the API job to succeed:
+
+| App | Worker | URL |
+| --- | --- | --- |
+| API | `api` | https://api.burn-rate-app.workers.dev |
+| Dashboard | `app` | https://app.burn-rate-app.workers.dev |
+
+The WebAuthn RP ID is `burn-rate-app.workers.dev` (the account's workers.dev subdomain), which covers both hosts — required for the cross-origin passkey + session-cookie flow. Cross-origin config lives in each app's `wrangler.jsonc` `vars`: the API carries `DASHBOARD_URL`, `BETTER_AUTH_URL`, and `PASSKEY_RP_ID`; the dashboard carries `API_URL`. `BETTER_AUTH_SECRET` is a Worker secret (rotate with `wrangler secret put BETTER_AUTH_SECRET`).
+
+Changing hosts or migrating to custom domains requires coordinated origin,
+cookie, and RP configuration. Changing the RP ID can strand existing passkeys.
 
 Framework references: [Turborepo workspaces](https://turborepo.dev/docs/crafting-your-repository/structuring-a-repository), [SvelteKit project structure](https://svelte.dev/docs/kit/project-structure), [Astro setup](https://docs.astro.build/en/install-and-setup/), and [Wrangler configuration](https://developers.cloudflare.com/workers/wrangler/configuration/).

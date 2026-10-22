@@ -35,7 +35,7 @@ async function run(): Promise<void> {
     if (action === 'rotate-dek' || action === 'rewrap-kek') {
       const ownerId = option('--owner');
       if (!ownerId || ownerId === 'default') throw new Error('Explicit account required');
-      const account = await sql.query('SELECT id FROM auth_users WHERE id = $1', [ownerId]);
+      const account = await sql.query('SELECT id FROM "user" WHERE id = $1', [ownerId]);
       if (!account.rows.length) throw new Error('Account not found');
       if (action === 'rotate-dek') {
         await rotateDataKey(sql, config, ownerId);
@@ -51,7 +51,7 @@ async function run(): Promise<void> {
     if (!owners || typeof owners.sampleOwners !== 'object' || typeof owners.dumps !== 'object') throw new Error('Invalid owner mapping');
     const configuredOwners = [...Object.values(owners.sampleOwners), ...Object.values(owners.dumps)];
     for (const owner of configuredOwners) {
-      const { rows } = await sql.query('SELECT id FROM auth_users WHERE id = $1', [owner.ownerId]);
+      const { rows } = await sql.query('SELECT id FROM "user" WHERE id = $1', [owner.ownerId]);
       if (!rows.length) throw new Error('Mapped owner account not found');
     }
     const bucketName = required('R2_BUCKET');

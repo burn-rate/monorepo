@@ -33,11 +33,11 @@ put real secrets in Wrangler JSON, frontend environment variables, or Git.
 | --- | --- |
 | `DATABASE_URL` / `DB_CONNECTION_STRING` | Private operator connection; `apps/api/.env` can supply either name |
 | `DATABASE_CA_FILE` | Optional CA PEM path override; Timescale connections use the bundled public CA by default with full certificate and hostname verification |
-| `AUTH_SECRET` | Independent Better Auth secret with at least 32 characters |
-| `AUTH_BASE_URL` | Exact API origin, e.g. `https://api.example.com` |
-| `DASHBOARD_ORIGINS` | JSON array of exact trusted origins, e.g. `["https://app.example.com"]` |
-| `PASSKEY_RP_ID` | Stable RP domain, e.g. `example.com` |
-| `PASSKEY_RP_NAME` | Display name for browser ceremonies |
+| `BETTER_AUTH_SECRET` | Independent Better Auth Worker secret with at least 32 characters |
+| `BETTER_AUTH_URL` | Exact API origin: `https://api.burn-rate-app.workers.dev` in production |
+| `DASHBOARD_URL` | Exact trusted dashboard origin: `https://app.burn-rate-app.workers.dev` in production |
+| `PASSKEY_RP_ID` | Production RP domain: `burn-rate-app.workers.dev` |
+| `PASSKEY_RP_NAME` | Display name for browser ceremonies; `Burn Rate` |
 | `AUTH_COOKIE_SAME_SITE` | `lax` default; `none` requires HTTPS |
 | `ENCRYPTION_ENVIRONMENT` | Stable, distinct staging/production identity authenticated with ciphertext |
 | `HEALTH_KEK_ID` | Active wrapping-key version ID |
@@ -47,13 +47,19 @@ put real secrets in Wrangler JSON, frontend environment variables, or Git.
 | `AUTH_ATTEMPTS_PER_MINUTE` | Default 10 per Cloudflare client IP, maximum 1000 |
 | `TOKENS_PER_MINUTE` | Default 10 per session owner, maximum 100 |
 
-The example origins above illustrate a same-site topology. Actual production
-and staging URLs and RP IDs must be chosen before the first passkey enrollment.
-The API host must be compatible with the frontend's cookie topology; unrelated
-`workers.dev` and dashboard hosts are not a production default. Use distinct
-origins, environment names, secrets, and databases for staging. Changing an RP
-ID after enrollment can strand existing credentials. Local development uses
-`http://localhost:8787`, `http://localhost:5173`, and RP ID `localhost`.
+The production API Worker is `api` and the dashboard Worker is `app`, at the
+origins above. Both hosts use the account's `burn-rate-app.workers.dev` RP ID
+and a same-site cookie topology. Use distinct staging origins, environment
+names, secrets, and databases. Changing an RP ID after enrollment can strand
+existing credentials. Local development uses `http://localhost:8787`,
+`http://localhost:5173`, and RP ID `localhost`.
+
+`AUTH_SECRET` and `AUTH_BASE_URL` remain compatibility aliases for the canonical
+Better Auth inputs. `DASHBOARD_ORIGINS` remains a JSON-array alias for exact
+trusted origins; normal deployment uses `DASHBOARD_URL`. The dashboard's public
+`API_URL` must match `BETTER_AUTH_URL`. `HEALTH_KEKS` remains a separately
+provisioned secret; the public environment/active-key IDs in Wrangler do not
+supply wrapping-key material.
 
 Cookies are HttpOnly and Secure on HTTPS. Browser SDK requests use
 `credentials: 'include'`. CORS permits only exact configured origins, with
@@ -121,13 +127,21 @@ any failed SQL stop the job before
 Worker deployment. Connection strings and driver error details are not logged.
 
 Only `000_metrics.sql`, `002_encrypted.sql`, `004_auth.sql`, and `005_limits.sql`
-run automatically. A session advisory lock serializes migration clients, and
+run automatically. `004` bootstraps or upgrades canonical `user`, `session`,
+`account`, `verification`, and `passkey` tables, then adds server-owned
+onboarding, passkey freshness, and ingestion credentials. Existing main auth
+records use those same canonical tables; no parallel `auth_*` account store is
+introduced. `packages/db` forwards its `db:migrate` command to this API runner;
+its historical Drizzle baseline is retained unchanged, and `db:generate` is
+offline metadata generation for review. A session advisory lock serializes migration clients, and
 each file's SQL and checksum ledger entry commit in one transaction. Successful
 files remain applied if a later migration or Worker deployment fails; rerunning
 the job skips those files. Do not edit an applied file or automatically reverse
 successful migrations. Add future schema changes in a new forward migration
 and register it in `DEFAULT_MIGRATIONS`. Historical `001_init.sql` and destructive
-`003_cutover.sql` are excluded from CI.
+`003_cutover.sql` are excluded from CI. The dashboard deploy job waits for the
+API job to finish successfully, preserving migration-before-release ordering
+for both Workers.
 
 ## Database ordering and rollout
 

@@ -1,4 +1,6 @@
 ---
+import '@burn-rate/design-tokens/css';
+
 const title = 'burn-rate';
 ---
 
@@ -17,3 +19,27 @@ const title = 'burn-rate';
     </main>
   </body>
 </html>
+
+<style>
+  body {
+    margin: 0;
+    background: var(--color-bg);
+    color: var(--color-text);
+    font-family: var(--font-sans);
+  }
+
+  main {
+    max-width: 64rem;
+    margin: 0 auto;
+    padding: 3rem 1.5rem;
+  }
+
+  h1 {
+    color: var(--color-frosting);
+    text-shadow: var(--shadow-sprinkle);
+  }
+
+  p {
+    color: var(--color-text-muted);
+  }
+</style>

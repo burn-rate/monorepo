@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "burn-rate-api",
+  "name": "api",
   "keep_vars": true,
   "main": "src/index.ts",
   "account_id": "888e985dae423cb6bab33658a25951de",
@@ -8,6 +8,15 @@
   "compatibility_flags": ["nodejs_compat"],
   "observability": {
     "enabled": true
+  },
+  "vars": {
+    "DASHBOARD_URL": "https://app.burn-rate-app.workers.dev",
+    "BETTER_AUTH_URL": "https://api.burn-rate-app.workers.dev",
+    "PASSKEY_RP_ID": "burn-rate-app.workers.dev",
+    "PASSKEY_RP_NAME": "Burn Rate",
+    "AUTH_COOKIE_SAME_SITE": "lax",
+    "ENCRYPTION_ENVIRONMENT": "production",
+    "HEALTH_KEK_ID": "production-v1"
   },
   "r2_buckets": [
     {

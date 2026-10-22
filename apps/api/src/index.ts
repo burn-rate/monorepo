@@ -102,7 +102,7 @@ export function createApp(connect: (env: Env) => Promise<Sql> = getSql) {
     const path = new URL(c.req.url).pathname;
     const sql = await sqlFor(c.req.raw, c.env);
     if (/\/(onboarding\/context|generate-register-options|verify-registration|generate-authenticate-options|verify-authentication)$/.test(path)) {
-      const identity = `${c.env.AUTH_SECRET}:${c.req.header('CF-Connecting-IP') ?? 'unknown'}`;
+      const identity = `${readAuthConfig(c.env).secret}:${c.req.header('CF-Connecting-IP') ?? 'unknown'}`;
       await enforceRateLimit(sql, 'auth', identity, positiveLimit(c.env.AUTH_ATTEMPTS_PER_MINUTE, 10, 1000));
     }
     let request = c.req.raw;

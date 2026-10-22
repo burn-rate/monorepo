@@ -32,7 +32,7 @@ Set `ENCRYPTION_ENVIRONMENT` to a stable deployment identifier, such as
 
 Provision through the existing secret manager/Worker secret workflow. Do not
 commit the real JSON, pass it as a command-line argument, or paste it into task
-notes/logs. `AUTH_SECRET` must be independent of every health key.
+notes/logs. `BETTER_AUTH_SECRET` (or its compatibility alias `AUTH_SECRET`) must be independent of every health key.
 Back up wrapping versions in the approved secret store separately from database
 exports. Database rows contain only wrapped per-user data/index keys. The
 independent index key remains stable during routine DEK/KEK rotation.
@@ -63,8 +63,10 @@ request credentials, SQL parameters, or serialized SDK/driver exceptions.
    disposable database or isolated test schema.
 2. Run `pnpm db:migrate` for the selected target. The checksummed runner applies
    `000_metrics.sql`, `002_encrypted.sql`, `004_auth.sql`, and `005_limits.sql`,
-   bootstrapping the registry and creating encrypted sample/key, auth/token,
-   and rate-limit storage directly. Do not run historical `001_init.sql` on a
+   bootstrapping the registry and creating encrypted sample/key, canonical
+   auth/token, and rate-limit storage directly. Auth uses the shared `user`,
+   `session`, `account`, `verification`, and `passkey` tables from `@burn-rate/db`;
+   `004` supplies the required additive upgrades without a parallel auth store. Do not run historical `001_init.sql` on a
    fresh target: it creates plaintext samples and a daily aggregate. Fresh
    initialization must create neither, and requires no `db:cutover` step.
    Production GitHub Actions runs the same normal migration list before Worker

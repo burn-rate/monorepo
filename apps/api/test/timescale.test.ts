@@ -44,8 +44,8 @@ describe.runIf(Boolean(process.env.TEST_DATABASE_URL))('representative Timescale
       const tables = await sql.query<{ table_name: string }>(`SELECT table_name FROM information_schema.tables
         WHERE table_schema=$1 AND table_type='BASE TABLE'`, [schema]);
       expect(tables.rows.map(row => row.table_name)).toEqual(expect.arrayContaining([
-        'metrics', 'encrypted_health_samples', 'health_user_keys', 'auth_users', 'auth_sessions',
-        'auth_passkeys', 'auth_verifications', 'auth_onboarding', 'ingestion_tokens', 'api_rate_limits'
+        'metrics', 'encrypted_health_samples', 'health_user_keys', 'user', 'session',
+        'passkey', 'verification', 'auth_onboarding', 'ingestion_tokens', 'api_rate_limits'
       ]));
       const columns = await sql.query<{ column_name: string }>(`SELECT column_name FROM information_schema.columns
         WHERE table_schema=$1 AND table_name='encrypted_health_samples'`, [schema]);
