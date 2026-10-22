@@ -19,14 +19,14 @@ describe('fetchScore', () => {
       'https://api.example.com/score?timeZone=America%2FLos_Angeles'
     );
     expect((fetchMock.mock.calls[0][1] as RequestInit).credentials).toBe('include');
-    expect(score.score).toBe(737);
+    expect(score.score).toBe(747);
     expect(creditSnapshotSchema.parse(score)).toEqual(score);
   });
 
   it('falls back to the stub snapshot when the endpoint is missing', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response('nope', { status: 404 })));
     const score = await fetchScore('https://api.example.com', 'UTC');
-    expect(score.score).toBe(737);
+    expect(score.score).toBe(747);
     expect(creditSnapshotSchema.parse(score)).toEqual(score);
   });
 

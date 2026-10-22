@@ -3,6 +3,7 @@
   import { API_URL } from '$app/env/public';
   import type { HealthSampleDto } from '@burn-rate/api-schema';
   import { bucketSums, fetchMetricSamples, startOfHour, toPoints } from '#lib/metrics.ts';
+  import { mockEnergySamples, mockHeartSamples, mockStandSamples } from '#lib/mock.ts';
   import LineChart from '#lib/components/LineChart.svelte';
   import HourlyBars from '#lib/components/HourlyBars.svelte';
 
@@ -45,6 +46,20 @@
     standSamples = stand.status === 'fulfilled' ? stand.value : [];
     heartSamples = heart.status === 'fulfilled' ? heart.value : [];
     energySamples = energy.status === 'fulfilled' ? energy.value : [];
+    // Fresh account — nothing recorded yet. Fill the charts with demo data
+    // instead of three empty cards; real samples replace it as they arrive.
+    if (
+      stand.status === 'fulfilled' &&
+      heart.status === 'fulfilled' &&
+      energy.status === 'fulfilled' &&
+      standSamples.length === 0 &&
+      heartSamples.length === 0 &&
+      energySamples.length === 0
+    ) {
+      standSamples = mockStandSamples(now);
+      heartSamples = mockHeartSamples(now);
+      energySamples = mockEnergySamples(now);
+    }
     if (stand.status === 'rejected' && heart.status === 'rejected' && energy.status === 'rejected') {
       status = 'error';
       const cause = stand.reason;

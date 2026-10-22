@@ -2,16 +2,16 @@
   import { onMount } from 'svelte';
   import { API_URL } from '$app/env/public';
   import { CREDIT_SCORE_MAX, CREDIT_SCORE_MIN } from '@burn-rate/api-schema';
-  import { fetchScore, scoreFraction } from '#lib/score.ts';
+  import { STUB_CREDIT_SCORE, fetchScore, scoreFraction } from '#lib/score.ts';
 
   let score = $state<number | null>(null);
-  let error = $state<string | null>(null);
 
   onMount(async () => {
     try {
       score = (await fetchScore(API_URL)).score;
-    } catch (cause) {
-      error = cause instanceof Error ? cause.message : 'Something went wrong';
+    } catch {
+      // No calculated score available — render the default rather than an error.
+      score = STUB_CREDIT_SCORE;
     }
   });
 
@@ -25,18 +25,14 @@
 
 <article class="card">
   <span class="chip">credit score</span>
-  {#if error}
-    <p class="error">{error}</p>
-  {:else}
-    <div class="donut" role="img" aria-label={label}>
-      <svg viewBox="0 0 36 36" aria-hidden="true">
-        <circle class="track" cx="18" cy="18" r={RADIUS} />
-        <circle class="arc" cx="18" cy="18" r={RADIUS} stroke-dasharray="{arc} 100" />
-      </svg>
-      <span class="score">{score ?? '—'}</span>
-    </div>
-    <p class="range">{CREDIT_SCORE_MIN}–{CREDIT_SCORE_MAX}</p>
-  {/if}
+  <div class="donut" role="img" aria-label={label}>
+    <svg viewBox="0 0 36 36" aria-hidden="true">
+      <circle class="track" cx="18" cy="18" r={RADIUS} />
+      <circle class="arc" cx="18" cy="18" r={RADIUS} stroke-dasharray="{arc} 100" />
+    </svg>
+    <span class="score">{score ?? '—'}</span>
+  </div>
+  <p class="range">{CREDIT_SCORE_MIN}–{CREDIT_SCORE_MAX}</p>
 </article>
 
 <style>
@@ -103,12 +99,6 @@
   .range {
     margin: 0;
     color: var(--color-text-muted);
-    font-size: var(--text-sm);
-  }
-
-  .error {
-    margin: 0;
-    color: var(--color-danger);
     font-size: var(--text-sm);
   }
 </style>

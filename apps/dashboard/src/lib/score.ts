@@ -4,8 +4,8 @@ import { creditSnapshotSchema, type CreditSnapshot } from '@burn-rate/api-schema
 export const CREDIT_SCORE_MIN = 300;
 export const CREDIT_SCORE_MAX = 850;
 
-/** Placeholder rendered until GET /score ships or history exists; 737 sits two thirds of the way up the scale. */
-export const STUB_CREDIT_SCORE = 737;
+/** Placeholder rendered until GET /score ships or history exists; 747 sits comfortably in the upper scale. */
+export const STUB_CREDIT_SCORE = 747;
 
 /** Contract-shaped placeholder snapshot behind the stub score. */
 export function stubScoreSnapshot(timeZone: string, now = new Date()): CreditSnapshot {
