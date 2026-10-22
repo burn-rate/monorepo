@@ -1,0 +1,19 @@
+{
+  "name": "@burn-rate/design-tokens",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./css": {
+      "types": "./src/tokens-css.d.ts",
+      "default": "./src/tokens.css"
+    }
+  },
+  "scripts": {
+    "check": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^6.0.0"
+  }
+}
