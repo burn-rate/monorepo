@@ -1,6 +1,10 @@
 {
   "mcp": {
     "servers": {
+      "better-auth": {
+        "type": "remote",
+        "url": "https://mcp.better-auth.com/mcp"
+      },
       "pg-aiguide": {
         "type": "remote",
         "url": "https://mcp.tigerdata.com/docs"

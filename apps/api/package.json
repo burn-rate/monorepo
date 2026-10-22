@@ -7,10 +7,16 @@
     "dev": "wrangler dev --port 8787 --ip 0.0.0.0 --env-file .dev.vars",
     "tail": "wrangler tail burn-rate-api --format pretty",
     "build": "wrangler deploy --dry-run --outdir dist",
-    "check": "tsc --noEmit"
+    "check": "tsc --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
+    "@better-auth/drizzle-adapter": "^1.7.12",
+    "@better-auth/passkey": "^1.7.12",
     "@burn-rate/api-schema": "workspace:*",
+    "@burn-rate/db": "workspace:*",
+    "better-auth": "^1.7.12",
+    "hono": "^4.13.13",
     "pg": "^8.23.1"
   },
   "devDependencies": {

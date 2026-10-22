@@ -9,6 +9,7 @@ apps/
   marketing/    Static Astro marketing site
 packages/
   api-schema/   Shared Zod schemas and inferred TypeScript API types
+  db/           Shared Drizzle schema (auth + health tables) and migrations
   design-tokens/ Simpsons donut theme: CSS custom properties and TS tokens
 ```
 
@@ -60,6 +61,30 @@ External timeseries data is normalized and stored in TimescaleDB (Tiger Cloud se
 
 D1 is not used — TimescaleDB/Postgres is the single application database, and
 the former D1 binding has been removed from the Worker configuration.
+
+## Authentication
+
+Auth is **passkey-only** (WebAuthn, no passwords), powered by [Better Auth](https://better-auth.com) with the `@better-auth/passkey` plugin. The auth server lives in the API and mounts Better Auth at `/api/auth/*`; the dashboard talks to it cross-origin with `createAuthClient` from `better-auth/svelte`.
+
+- **Sign-up**: passkey-first — the client forwards an unsigned `{ email, name }` context and the server creates the account only if the email is new (an existing email can never gain a passkey from an unsigned context), then the WebAuthn ceremony runs and a session cookie is set.
+- **Sign-in**: `authClient.signIn.passkey()` against the same account.
+- **Storage**: Better Auth tables (`user`, `session`, `account`, `verification`, `passkey`) live in the same TimescaleDB/Postgres instance, migrated with drizzle-kit from `packages/db`.
+
+Schema for auth tables is generated into `packages/db/src/schema/auth.ts` (do not hand-edit; regenerate after changing plugins) and migrated with:
+
+```sh
+set -a; source .env; set +a
+DATABASE_URL="$DB_CONNECTION_STRING" pnpm --filter @burn-rate/db db:migrate
+```
+
+To regenerate the auth schema after changing the Better Auth config:
+
+```sh
+pnpm dlx auth@latest generate --adapter drizzle --dialect postgresql \
+  --config apps/api/auth.generate.ts --output packages/db/src/schema/auth.ts -y
+```
+
+Required env vars: `BETTER_AUTH_SECRET` (Worker secret / `.dev.vars`, see `apps/api/.dev.vars.example`) and `API_URL` on the dashboard (see `apps/dashboard/.env.example`). In production, set `DASHBOARD_URL` on the Worker to the dashboard origin — it drives both CORS and Better Auth's `trustedOrigins`. The WebAuthn RP ID defaults to `localhost` in dev; production must serve the API and dashboard from the same registrable domain (e.g. `api.example.com` + `app.example.com`, RP ID `example.com`).
 
 ## Timeseries database
 

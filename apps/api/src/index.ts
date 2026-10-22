@@ -1,11 +1,19 @@
+import { Hono } from 'hono';
+import { cors } from 'hono/cors';
 import { healthResponseSchema, timeseriesHealthResponseSchema } from '@burn-rate/api-schema';
+import { createDb } from '@burn-rate/db';
+import { createAuth, type AuthEnv } from './auth';
 import { getSql } from './db';
 import { mapPayload } from './ingest';
 import { storeSamples } from './store';
 
-export interface Env {
+export interface Env extends AuthEnv {
   HOOK_DUMPS: R2Bucket;
   TIMESERIES_DB: Hyperdrive;
+}
+
+function dashboardOrigin(env: Env): string {
+  return env.DASHBOARD_URL ?? 'http://localhost:5173';
 }
 
 async function handleTimeseriesHealth(env: Env): Promise<Response> {
@@ -79,24 +87,38 @@ async function handleHook(request: Request, env: Env, url: URL): Promise<Respons
   return Response.json({ ok: true, dumpKey: key, stored, ingest: { ...ingest, samples: undefined } });
 }
 
-export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
-    const url = new URL(request.url);
+const app = new Hono<{ Bindings: Env }>();
 
-    if (request.method === 'GET' && url.pathname === '/health') {
-      return Response.json(
-        healthResponseSchema.parse({ status: 'ok', service: 'burn-rate-api' })
-      );
-    }
+// Cross-origin auth from the dashboard: explicit origin + credentials so the
+// session cookie round-trips. Must match trustedOrigins in src/auth.ts.
+app.use(
+  '/api/auth/*',
+  cors({
+    origin: (origin, c) => (origin === dashboardOrigin(c.env) ? origin : undefined),
+    credentials: true,
+    allowHeaders: ['Content-Type', 'Authorization'],
+    allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']
+  })
+);
 
-    if (request.method === 'GET' && url.pathname === '/timeseries/health') {
-      return handleTimeseriesHealth(env);
-    }
+app.get('/health', (c) =>
+  c.json(healthResponseSchema.parse({ status: 'ok', service: 'burn-rate-api' }))
+);
 
-    if (url.pathname === '/hook') {
-      return handleHook(request, env, url);
-    }
+app.get('/timeseries/health', (c) => handleTimeseriesHealth(c.env));
 
-    return Response.json({ error: 'Not found' }, { status: 404 });
+app.post('/hook', (c) => handleHook(c.req.raw, c.env, new URL(c.req.url)));
+
+// Better Auth (passkey-only). One short-lived db pool per request — Hyperdrive
+// pools at the edge, and pg connects lazily so this stays cheap.
+app.all('/api/auth/*', async (c) => {
+  const { db, end } = createDb(c.env.TIMESERIES_DB.connectionString, { max: 1 });
+  try {
+    const auth = createAuth(db, c.env);
+    return await auth.handler(c.req.raw);
+  } finally {
+    await end().catch(() => {});
   }
-} satisfies ExportedHandler<Env>;
+});
+
+export default app;

@@ -3,6 +3,10 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "imports": {
+    "#lib": "./src/lib/index.ts",
+    "#lib/*": "./src/lib/*"
+  },
   "scripts": {
     "dev": "vite dev --port 5173 --strictPort",
     "build": "vite build",
@@ -10,7 +14,11 @@
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json"
   },
   "dependencies": {
-    "@burn-rate/api-schema": "workspace:*"
+    "@better-auth/passkey": "^1.7.12",
+    "@burn-rate/api-schema": "workspace:*",
+    "@burn-rate/db": "workspace:*",
+    "@burn-rate/design-tokens": "workspace:*",
+    "better-auth": "^1.7.12"
   },
   "devDependencies": {
     "@sveltejs/adapter-auto": "^8.0.0",

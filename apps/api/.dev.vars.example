@@ -1,4 +1,11 @@
 # Local dev connection to the TimescaleDB instance. `wrangler dev` uses this
 # for the TIMESERIES_DB Hyperdrive binding instead of the cloud config.
-# Example: postgresql://postgres:password@localhost:5432/burn_rate
+# Example: postgresql://tsdbadmin:password@abc123.tsdb.cloud.timescale.com:34344/tsdb?sslmode=require
 CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_TIMESERIES_DB=""
+
+# Better Auth signing secret. Generate with: openssl rand -base64 32
+BETTER_AUTH_SECRET=""
+
+# Optional overrides (defaults shown):
+# BETTER_AUTH_URL=http://localhost:8787
+# DASHBOARD_URL=http://localhost:5173
