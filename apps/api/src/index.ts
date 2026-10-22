@@ -4,7 +4,6 @@ import { mapPayload } from './ingest';
 import { storeSamples } from './store';
 
 export interface Env {
-  DB: D1Database;
   HOOK_DUMPS: R2Bucket;
   TIMESERIES_DB: Hyperdrive;
 }
