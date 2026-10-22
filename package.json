@@ -8,7 +8,8 @@
   "scripts": {
     "dev": "turbo run dev",
     "build": "turbo run build",
-    "check": "turbo run check"
+    "check": "turbo run check",
+    "test": "turbo run test"
   },
   "devDependencies": {
     "turbo": "^2.11.10"

@@ -13,6 +13,10 @@
     "check": {
       "dependsOn": ["^check"],
       "outputs": []
+    },
+    "test": {
+      "dependsOn": ["^build"],
+      "outputs": []
     }
   }
 }
