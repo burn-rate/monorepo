@@ -89,6 +89,10 @@
   --color-sky-soft: var(--blue-100); /* subtle backgrounds */
   --color-on-sky: var(--white); /* readable text on blue */
 
+  /* --- Semantic: status ---------------------------------------------------- */
+
+  --color-danger: var(--pink-700); /* raspberry: a dark frosting shade */
+
   /* --- Shape: donuts are round ------------------------------------------- */
 
   --radius-sprinkle: 6px; /* small elements: inputs, chips */
@@ -100,7 +104,37 @@
   --shadow-sprinkle: 0 1px 3px color-mix(in srgb, var(--brown-500) 25%, transparent);
   --shadow-donut: 0 4px 16px color-mix(in srgb, var(--brown-500) 18%, transparent);
 
-  /* --- Type --------------------------------------------------------------- */
+  /* --- Spacing: 4px base -------------------------------------------------- */
+
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-10: 2.5rem;
+  --space-12: 3rem;
+  --space-16: 4rem;
+
+  /* --- Type ---------------------------------------------------------------- */
+
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-base: 1rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.25rem;
+  --text-2xl: 1.5rem;
+  --text-3xl: 2rem;
+  --text-4xl: 3rem;
+
+  --leading-tight: 1.2;
+  --leading-normal: 1.5;
+  --leading-relaxed: 1.7;
+
+  --font-normal: 400;
+  --font-medium: 500;
+  --font-bold: 700;
 
   --font-sans:
     system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;

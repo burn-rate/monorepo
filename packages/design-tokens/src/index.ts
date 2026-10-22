@@ -76,6 +76,44 @@ export const shades = {
   blue: scale(primitives.blue, primitives.brown)
 } as const;
 
+/** Spacing scale: 4px base, step number × 0.25rem. Mirrors tokens.css. */
+export const spacing = {
+  1: '0.25rem',
+  2: '0.5rem',
+  3: '0.75rem',
+  4: '1rem',
+  5: '1.25rem',
+  6: '1.5rem',
+  8: '2rem',
+  10: '2.5rem',
+  12: '3rem',
+  16: '4rem'
+} as const;
+
+/** Type scale, leading ratios, and weights. Mirrors tokens.css. */
+export const typography = {
+  size: {
+    xs: '0.75rem',
+    sm: '0.875rem',
+    base: '1rem',
+    lg: '1.125rem',
+    xl: '1.25rem',
+    '2xl': '1.5rem',
+    '3xl': '2rem',
+    '4xl': '3rem'
+  },
+  leading: {
+    tight: 1.2,
+    normal: 1.5,
+    relaxed: 1.7
+  },
+  weight: {
+    normal: 400,
+    medium: 500,
+    bold: 700
+  }
+} as const;
+
 /** Donut-metaphor roles, mirroring the semantic layer in tokens.css. */
 export const theme = {
   bg: primitives.white,
@@ -103,5 +141,6 @@ export const theme = {
     strong: shades.blue[600],
     soft: shades.blue[100],
     on: primitives.white
-  }
+  },
+  danger: shades.pink[700]
 } as const;
