@@ -1,0 +1,86 @@
+{
+  "app": { "build": "4", "name": "Health Exporter", "version": "1.0.0" },
+  "batchId": "F75E6057-8C2D-471A-B553-4BD7CEDDECD3",
+  "createdAt": "2026-10-22T18:08:50Z",
+  "device": { "model": "iPhone14,3", "systemName": "iOS", "systemVersion": "27.2" },
+  "exportId": "7E6C8E93-C67E-4325-89C2-AE524A7115B8",
+  "range": { "end": "2026-10-22T18:08:50Z", "start": "2026-10-16T07:00:00Z" },
+  "schemaVersion": "health-exporter.v1",
+  "timezone": "America/Los_Angeles",
+  "samples": [
+    {
+      "device": { "hardwareVersion": "Watch7,12", "manufacturer": "Apple Inc.", "model": "Watch", "name": "Apple Watch", "softwareVersion": "27.0" },
+      "endAt": "2026-10-19T04:45:11Z",
+      "id": "HKQuantityTypeIdentifierActiveEnergyBurned:5D666A56-9BEE-47D0-B65C-EDF663A0397F",
+      "source": { "bundleIdentifier": "com.apple.health.5139302E", "name": "Allan’s Apple Watch", "version": "27.0" },
+      "startAt": "2026-10-19T04:45:08Z",
+      "typeIdentifier": "HKQuantityTypeIdentifierActiveEnergyBurned",
+      "typeKind": "quantity",
+      "unit": "kcal",
+      "uuid": "5D666A56-9BEE-47D0-B65C-EDF663A0397F",
+      "value": 0.187
+    },
+    {
+      "device": { "hardwareVersion": "Watch7,12", "manufacturer": "Apple Inc.", "model": "Watch", "name": "Apple Watch", "softwareVersion": "27.0" },
+      "endAt": "2026-10-19T04:50:11Z",
+      "id": "HKQuantityTypeIdentifierBasalEnergyBurned:9A1F2B3C-1111-2222-3333-444455556666",
+      "source": { "bundleIdentifier": "com.apple.health.5139302E", "name": "Allan’s Apple Watch" },
+      "startAt": "2026-10-19T04:45:11Z",
+      "typeIdentifier": "HKQuantityTypeIdentifierBasalEnergyBurned",
+      "typeKind": "quantity",
+      "unit": "kcal",
+      "uuid": "9A1F2B3C-1111-2222-3333-444455556666",
+      "value": 0.812
+    },
+    {
+      "device": { "hardwareVersion": "Watch7,12", "manufacturer": "Apple Inc.", "model": "Watch", "name": "Apple Watch", "softwareVersion": "27.0" },
+      "endAt": "2026-10-19T15:05:00Z",
+      "id": "HKQuantityTypeIdentifierAppleStandTime:A1B2C3D4-AAAA-BBBB-CCCC-DDDDEEEEFFFF",
+      "source": { "bundleIdentifier": "com.apple.health.5139302E", "name": "Allan’s Apple Watch" },
+      "startAt": "2026-10-19T15:00:00Z",
+      "typeIdentifier": "HKQuantityTypeIdentifierAppleStandTime",
+      "typeKind": "quantity",
+      "unit": "min",
+      "uuid": "A1B2C3D4-AAAA-BBBB-CCCC-DDDDEEEEFFFF",
+      "value": 3
+    },
+    {
+      "endAt": "2026-10-20T18:12:00Z",
+      "id": "HKQuantityTypeIdentifierStepCount:0000-0000",
+      "source": { "bundleIdentifier": "com.apple.health.5139302E", "name": "Allan’s iPhone" },
+      "startAt": "2026-10-20T18:07:00Z",
+      "typeIdentifier": "HKQuantityTypeIdentifierStepCount",
+      "typeKind": "quantity",
+      "unit": "count",
+      "uuid": "0000-0000",
+      "value": 42
+    },
+    {
+      "activitySummary": {
+        "activeEnergyBurned": 1040.1363046016702,
+        "activeEnergyBurnedGoal": 1100,
+        "activeEnergyUnit": "kcal",
+        "activityMoveMode": 1,
+        "appleExerciseTime": 94,
+        "appleExerciseTimeGoal": 90,
+        "appleMoveTime": 0,
+        "appleMoveTimeGoal": 0,
+        "appleStandHours": 11,
+        "appleStandHoursGoal": 14,
+        "date": "2026-10-16",
+        "exerciseTimeUnit": "min",
+        "moveTimeUnit": "min",
+        "paused": false,
+        "standHoursUnit": "count"
+      },
+      "endAt": "2026-10-17T07:00:00Z",
+      "id": "HKActivitySummaryTypeIdentifier:2026-10-16",
+      "source": { "bundleIdentifier": "com.apple.Fitness", "name": "Apple Fitness" },
+      "startAt": "2026-10-16T07:00:00Z",
+      "typeIdentifier": "HKActivitySummaryTypeIdentifier",
+      "typeKind": "activitySummary",
+      "unit": "kcal",
+      "value": 1040.1363046016702
+    }
+  ]
+}

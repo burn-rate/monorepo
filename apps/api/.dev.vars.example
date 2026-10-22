@@ -1,5 +1,4 @@
-# Optional placeholders for the future external timeseries database integration.
-# Used by /timeseries/health in local dev (prod uses the Hyperdrive binding).
-# Example: postgres://tsdbadmin:PASSWORD@abc123.tsdb.cloud.timescale.com:34552/tsdb?sslmode=require
-TIMESERIES_DB_URL=""
-TIMESERIES_DB_TOKEN=""
+# Local dev connection to the TimescaleDB instance. `wrangler dev` uses this
+# for the TIMESERIES_DB Hyperdrive binding instead of the cloud config.
+# Example: postgresql://postgres:password@localhost:5432/burn_rate
+WRANGLER_HYPERDRIVE_LOCAL_CONNECTION_STRING_TIMESERIES_DB=""
