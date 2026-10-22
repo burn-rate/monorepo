@@ -1,9 +1,9 @@
 import { createAuthClient } from 'better-auth/svelte';
 import { passkeyClient } from '@better-auth/passkey/client';
 import { API_URL } from '$app/env/public';
-import { encodePasskeySignupContext } from '@burn-rate/db/auth-context';
+import { requestOnboardingContext, type PasskeySignupInput } from './passkey-onboarding';
 
-export { encodePasskeySignupContext };
+export const requestPasskeySignupContext = (input: PasskeySignupInput) => requestOnboardingContext(API_URL, input);
 
 /**
  * Better Auth client pointed at the API (the auth server is apps/api, not
@@ -13,5 +13,6 @@ export { encodePasskeySignupContext };
  */
 export const authClient = createAuthClient({
   baseURL: API_URL,
+  fetchOptions: { credentials: 'include' },
   plugins: [passkeyClient()]
 });

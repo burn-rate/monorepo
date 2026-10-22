@@ -9,7 +9,8 @@ apps/
   marketing/    Static Astro marketing site
 packages/
   api-schema/   Shared Zod schemas and inferred TypeScript API types
-  db/           Shared Drizzle schema (auth + health tables) and migrations
+  db/           Shared Postgres client and Drizzle schema metadata
+  sdk/          Generated Hey API client and request-scoped Fetch helpers
   design-tokens/ Simpsons donut theme: CSS custom properties and TS tokens
 ```
 
@@ -45,12 +46,15 @@ Run an individual app with `pnpm --filter @burn-rate/api dev` (or `@burn-rate/da
 
 ```sh
 pnpm check  # Type checking across the workspace
+pnpm test   # Mapping, auth, crypto, persistence, route, and SDK checks
 pnpm build  # Build frontends and bundle the Worker without deploying
+pnpm generate  # Offline OpenAPI export and generated SDK
+pnpm check:generated  # Detect tracked and untracked generated output drift
 ```
 
 ## API and databases
 
-The Worker exposes `GET /health` as a starter route. Its response schema and TypeScript type live in `@burn-rate/api-schema`, which both the API and dashboard can import directly. Workspace source is bundled by the consuming app, so the shared package needs no separate build step.
+The Hono Worker exposes public `GET /health` and `/openapi.json`, Better Auth passkey endpoints under `/api/auth/*`, session-protected account/metric/sample reads, and ingestion-token management. Runtime Zod contracts live in `@burn-rate/api-schema`; `@burn-rate/sdk` is generated offline from those route contracts. See the [frontend SDK handoff](packages/sdk/README.md), [passkey contract](docs/auth-handoff.md), and [deployment instructions](docs/api-deployment.md).
 
 TimescaleDB/Postgres is the planned single application database. Activity
 observations use Timescale hypertables; users, treats, loans, decisions, balances,
@@ -66,35 +70,59 @@ the former D1 binding has been removed from the Worker configuration.
 
 Auth is **passkey-only** (WebAuthn, no passwords), powered by [Better Auth](https://better-auth.com) with the `@better-auth/passkey` plugin. The auth server lives in the API and mounts Better Auth at `/api/auth/*`; the dashboard talks to it cross-origin with `createAuthClient` from `better-auth/svelte`.
 
-- **Sign-up**: passkey-first — the client forwards an unsigned `{ email, name }` context and the server creates the account only if the email is new (an existing email can never gain a passkey from an unsigned context), then the WebAuthn ceremony runs and a session cookie is set.
-- **Sign-in**: `authClient.signIn.passkey()` against the same account.
-- **Storage**: Better Auth tables (`user`, `session`, `account`, `verification`, `passkey`) live in the same TimescaleDB/Postgres instance, migrated with drizzle-kit from `packages/db`.
+- **Sign-up**: the dashboard posts `{ email, name }` to `/api/auth/onboarding/context` with credentials included, then passes the server-issued opaque context to `authClient.passkey.addPasskey({ context, createSession: true })`. Account creation and email persistence occur only after successful user-verified WebAuthn registration. Client-authored JSON cannot nominate an account or replace the server-issued context.
+- **Sign-in**: `authClient.signIn.passkey()` against the same account. Email is an account label, not a password or recovery method.
+- **Storage**: canonical Better Auth tables (`user`, `session`, `account`, `verification`, `passkey`) live in the same TimescaleDB/Postgres database, alongside server-owned onboarding and ingestion-token records. The API and operator tools reuse the client from `@burn-rate/db`.
 
-Schema for auth tables is generated into `packages/db/src/schema/auth.ts` (do not hand-edit; regenerate after changing plugins) and migrated with:
+The checksummed API runner is the single migration entry point for fresh and
+existing databases. `pnpm db:migrate` applies the metric registry, encrypted
+storage, canonical auth schema/upgrades, and rate limits. The package-level
+`pnpm --filter @burn-rate/db db:migrate` forwards to this runner. Historical
+Drizzle migration files remain unchanged; `db:generate` creates offline schema
+metadata for review rather than applying a second migration history.
 
-```sh
-set -a; source .env; set +a
-DATABASE_URL="$DB_CONNECTION_STRING" pnpm --filter @burn-rate/db db:migrate
-```
-
-To regenerate the auth schema after changing the Better Auth config:
-
-```sh
-pnpm dlx auth@latest generate --adapter drizzle --dialect postgresql \
-  --config apps/api/auth.generate.ts --output packages/db/src/schema/auth.ts -y
-```
-
-Required env vars: `BETTER_AUTH_SECRET` (Worker secret / `.dev.vars`, see `apps/api/.dev.vars.example`) and `API_URL` on the dashboard (see `apps/dashboard/.env.example`). In production, set `DASHBOARD_URL` on the Worker to the dashboard origin — it drives both CORS and Better Auth's `trustedOrigins`. The WebAuthn RP ID defaults to `localhost` in dev; production must serve the API and dashboard from the same registrable domain (e.g. `api.example.com` + `app.example.com`, RP ID `example.com`).
+Canonical Worker inputs are secret `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`,
+and `DASHBOARD_URL`; legacy `AUTH_SECRET`, `AUTH_BASE_URL`, and JSON
+`DASHBOARD_ORIGINS` aliases remain supported. The dashboard uses public
+`API_URL` (see `apps/dashboard/.env.example`). Local origins are
+`http://localhost:8787` and `http://localhost:5173`, with RP ID `localhost`.
+Production origins and RP ID are listed below. Configure them consistently
+before enrolling passkeys, whose credentials remain bound to their RP ID.
 
 ## Timeseries database
 
-Schema lives in `apps/api/timescale/`. Apply the init script with psql:
+Schema lives in `apps/api/timescale/`. Fresh initialization creates the metric
+registry, encrypted health storage, auth, and token tables directly with the
+checksummed migration runner:
 
 ```sh
-psql "$TIMESERIES_DB_URL" -f apps/api/timescale/001_init.sql
+pnpm db:migrate
 ```
 
-It creates the `metrics` registry, the `health_samples` hypertable (dedup key: `user_id, metric, time, ended_at, source_name`), columnstore policies, and the `health_daily` continuous aggregate.
+Load the intended `DATABASE_URL` or `DB_CONNECTION_STRING` privately;
+`apps/api/.env` can supply the local operator connection and must never be
+committed or exposed to the frontend. Timescale connections automatically use
+the [bundled public CA](apps/api/certs/README.md) with certificate and hostname
+verification. `DATABASE_CA_FILE` can override it for a different database CA.
+Fresh initialization creates no plaintext sample table or daily aggregate.
+Historical `001_init.sql` is not a fresh-install prerequisite. No legacy
+ownership mapping, backfill, or destructive cutover is needed when no legacy
+data exists. On 2026-10-22, inspection found 127 plaintext sample rows; the user
+confirmed they were disposable and authorized their removal. The guarded
+cleanup committed removal of `public.health_samples` and the empty
+`public.health_daily` aggregate, removed their two legacy policies, preserved
+the metric registry, and passed the deployment preflight. R2 objects were
+unchanged. Pause exporters until the encrypted Worker is deployed: the old
+Worker can still retain a plaintext R2 dump before its SQL write fails.
+Encrypted application migrations and Worker deployment have not run as part of
+this cleanup. The optional `pnpm db:cutover` applies only to an environment with
+actual legacy data after verified owner-mapped encryption backfill. Follow the
+[encryption operations runbook](docs/encryption-operations.md); migrations and
+deployment run in order through the GitHub Actions deploy workflow on `main`.
+Configure its `DB_CONNECTION_STRING` secret before merging; the Timescale CA is
+included in the repo. `DATABASE_CA_PEM` is an optional override. A migration
+failure blocks Worker deployment; successful files are recorded and skipped
+on retry.
 
 The development Hyperdrive ID is configured in `apps/api/wrangler.jsonc`. For a
 new environment, create a Hyperdrive config pointed at its origin database and
@@ -108,17 +136,15 @@ For local development, copy `.dev.vars.example` to `.dev.vars` and set `CLOUDFLA
 
 ## Ingest pipeline
 
-`POST /hook` accepts health payloads in either known shape — `health-exporter.v1` batches (`{schemaVersion, samples: [...]}`) or metrics exports (`{data: {metrics: [...]}}`). The pipeline dumps the raw payload to R2 (lineage), detects the format, maps it to the normalized sample schema in `@burn-rate/api-schema` (unknown metrics are dropped and logged), and upserts into `health_samples`. Run the mapping tests with:
+`POST /hook` requires a user-bound ingestion bearer token and accepts the existing `health-exporter.v1` and metrics-export payloads. It authenticates before retention, applies payload/rate limits, redacts request credentials, and durably encrypts raw R2 dumps before mapping and encrypted sample upserts. Unknown formats receive the same encryption. Owner identity comes only from the token; explicit owner IDs are required throughout mapping. Retry/correction preserves logical sample IDs. Protected sample values and source/device identities are encrypted; metric/time metadata remains readable.
 
-```sh
-pnpm --filter @burn-rate/api exec vitest run
-```
+Use `pnpm --filter @burn-rate/api test` for the mapping and backend integration suite. The tests use embedded Postgres and cryptographic WebAuthn fixtures; real-device staging and representative Timescale migration/policy checks remain part of rollout.
 
-The dashboard uses SvelteKit's automatic adapter until a hosting target is selected. The marketing site builds to static files. Cloud resources are configured separately from the local build.
+The dashboard uses SvelteKit's Cloudflare adapter and deploys as Worker `app`; the API deploys as Worker `api`. The marketing site builds to static files. Cloud resources are configured separately from the local build.
 
 ## Deployment
 
-Both apps deploy to Cloudflare Workers in the `Burn Rate` account (`888e…`) on push to `main` via `.github/workflows/deploy.yml`:
+Both apps deploy to Cloudflare Workers in the `Burn Rate` account (`888e…`) on push to `main` via `.github/workflows/deploy.yml`. Database migrations run before API deployment; dashboard deployment waits for the API job to succeed:
 
 | App | Worker | URL |
 | --- | --- | --- |
@@ -127,6 +153,7 @@ Both apps deploy to Cloudflare Workers in the `Burn Rate` account (`888e…`) on
 
 The WebAuthn RP ID is `burn-rate-app.workers.dev` (the account's workers.dev subdomain), which covers both hosts — required for the cross-origin passkey + session-cookie flow. Cross-origin config lives in each app's `wrangler.jsonc` `vars`: the API carries `DASHBOARD_URL`, `BETTER_AUTH_URL`, and `PASSKEY_RP_ID`; the dashboard carries `API_URL`. `BETTER_AUTH_SECRET` is a Worker secret (rotate with `wrangler secret put BETTER_AUTH_SECRET`).
 
-Note: workers.dev subdomains are effectively immutable — they can be deleted and re-claimed (`DELETE`/`PUT` on the Cloudflare `workers/subdomain` API), which breaks all existing URLs. Migrating to custom domains later means updating those vars and the RP ID together.
+Changing hosts or migrating to custom domains requires coordinated origin,
+cookie, and RP configuration. Changing the RP ID can strand existing passkeys.
 
 Framework references: [Turborepo workspaces](https://turborepo.dev/docs/crafting-your-repository/structuring-a-repository), [SvelteKit project structure](https://svelte.dev/docs/kit/project-structure), [Astro setup](https://docs.astro.build/en/install-and-setup/), and [Wrangler configuration](https://developers.cloudflare.com/workers/wrangler/configuration/).

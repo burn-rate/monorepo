@@ -9,9 +9,17 @@
     "dev": "turbo run dev",
     "build": "turbo run build",
     "check": "turbo run check",
-    "test": "turbo run test"
+    "test": "turbo run test",
+    "generate": "turbo run generate",
+    "check:generated": "pnpm generate && node scripts/check-generated.mjs",
+    "db:migrate": "pnpm --filter @burn-rate/api db:migrate",
+    "db:cutover": "pnpm --filter @burn-rate/api db:cutover",
+    "test:database": "pnpm --filter @burn-rate/api test:database"
   },
   "devDependencies": {
+    "@hey-api/openapi-ts": "0.99.0",
+    "tsx": "4.23.15",
+    "typescript": "6.0.3",
     "turbo": "^2.11.10"
   }
 }

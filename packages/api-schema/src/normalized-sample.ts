@@ -7,7 +7,7 @@ import { KNOWN_METRIC_NAMES } from './metrics';
  * upsert deduplicates on (userId, metric, time, endedAt, sourceName).
  */
 export const normalizedSampleSchema = z.object({
-  /** No payload carries user identity yet; the ingestor defaults this. */
+  /** Trusted account identity supplied by the ingestion-token resolver. */
   userId: z.string().min(1),
   metric: z.enum(KNOWN_METRIC_NAMES),
   /** Sample start. Hypertable partition column. */
@@ -23,6 +23,8 @@ export const normalizedSampleSchema = z.object({
   device: z.string().nullable().default(null),
   /** Source-native id (e.g. HealthKit uuid) when the payload provides one. */
   extId: z.string().nullable().default(null),
+  /** Optional legacy/source attributes; persisted only inside encrypted data. */
+  attrs: z.unknown().optional(),
   /** R2 object key of the raw dump this sample came from. */
   dumpKey: z.string().nullable().default(null)
 });

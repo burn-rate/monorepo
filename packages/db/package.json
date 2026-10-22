@@ -10,7 +10,7 @@
   "scripts": {
     "check": "tsc --noEmit",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate"
+    "db:migrate": "pnpm --filter @burn-rate/api db:migrate"
   },
   "dependencies": {
     "drizzle-orm": "^0.45.4",
@@ -20,6 +20,6 @@
   "devDependencies": {
     "@types/pg": "^8.23.1",
     "drizzle-kit": "^0.31.11",
-    "typescript": "^7.0.2"
+    "typescript": "^6.0.0"
   }
 }

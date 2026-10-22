@@ -3,7 +3,7 @@
 </svelte:head>
 
 <script lang="ts">
-  import { authClient, encodePasskeySignupContext } from '#lib/auth-client.ts';
+  import { authClient, requestPasskeySignupContext } from '#lib/auth-client.ts';
   import { API_URL } from '$app/env/public';
 
   let email = $state('');
@@ -27,17 +27,17 @@
     return message ? `${fallback}: ${message}` : fallback;
   }
 
-  // Passkey-first sign-up: the unsigned context (email + name) is forwarded to
-  // the API's resolveUser, which creates the account only if the email is new,
-  // then createSession logs the user in after the WebAuthn ceremony succeeds.
+  // The server issues single-use ceremony context. Email/name become an account
+  // only after WebAuthn verification, and createSession completes sign-in.
   async function signUpWithPasskey(event: SubmitEvent) {
     event.preventDefault();
     if (busy) return;
     error = null;
     busy = true;
     try {
+      const context = await requestPasskeySignupContext({ email, name: name || undefined });
       const { error: authError } = await authClient.passkey.addPasskey({
-        context: encodePasskeySignupContext({ email, name: name || undefined }),
+        context,
         createSession: true
       });
       if (authError) error = authError.message ?? 'Passkey registration failed';

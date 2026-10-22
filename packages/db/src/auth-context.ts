@@ -1,14 +1,12 @@
 import { z } from 'zod';
 
 /**
- * Opaque `context` string passed by the client during passkey-first
- * registration (`authClient.passkey.addPasskey({ context })`). The server
- * parses it in the passkey plugin's `registration.resolveUser` to create the
- * new account.
+ * Signup form input sent to POST /api/auth/onboarding/context. The endpoint
+ * returns an opaque, expiring context for passkey.addPasskey. These form
+ * fields alone are not a WebAuthn registration context.
  *
- * Security note: this context is UNSIGNED. `resolveUser` therefore only ever
- * CREATES users — it rejects contexts claiming an email that already exists,
- * so a passkey can never be attached to someone else's account.
+ * The API creates the user only after successful passkey verification and
+ * rejects an email already belonging to an account.
  */
 export const passkeySignupContextSchema = z.object({
   email: z.string().trim().toLowerCase().email(),
@@ -17,6 +15,7 @@ export const passkeySignupContextSchema = z.object({
 
 export type PasskeySignupContext = z.infer<typeof passkeySignupContextSchema>;
 
+/** @deprecated Serializes form input only; obtain the passkey context from the API. */
 export function encodePasskeySignupContext(context: PasskeySignupContext): string {
   return JSON.stringify(passkeySignupContextSchema.parse(context));
 }

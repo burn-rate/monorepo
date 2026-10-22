@@ -1,14 +1,18 @@
-// Loaded ONLY by the Better Auth CLI to generate the drizzle schema:
-//   pnpm dlx auth@latest generate --adapter drizzle --dialect postgresql \
-//     --config apps/api/auth.generate.ts --output packages/db/src/schema/auth.ts
-//
-// The runtime auth instance is created per request in src/auth.ts (Workers
-// don't benefit from a module singleton, and the db pool is request-scoped).
-// The connection string here is never dialed — pg.Pool connects lazily and
-// schema generation reads no data.
-import { createDb } from '@burn-rate/db';
+// Offline Better Auth schema-generator input. The runtime uses the same
+// canonical user/session/account/verification/passkey names and snake-case
+// columns as packages/db/src/schema/auth.ts, including passkey_verified_at.
+// No environment files, production configuration, or database factory is used.
 import { createAuth } from './src/auth';
+import type { Sql } from './src/db';
 
-const { db } = createDb('postgresql://schema-generation@localhost:5432/generate', { max: 1 });
+const schemaOnlySql = {
+  query: async () => { throw new Error('Offline auth schema generation must not execute database queries.'); }
+} as unknown as Sql;
 
-export const auth = createAuth(db, { BETTER_AUTH_SECRET: 'schema-generation-only' });
+export const auth = createAuth(schemaOnlySql, {
+  BETTER_AUTH_SECRET: 'schema-generation-only-without-production-secrets',
+  BETTER_AUTH_URL: 'http://localhost:8787',
+  DASHBOARD_URL: 'http://localhost:5173',
+  PASSKEY_RP_ID: 'localhost',
+  PASSKEY_RP_NAME: 'Burn Rate schema generation'
+});

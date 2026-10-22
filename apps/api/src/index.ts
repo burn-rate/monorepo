@@ -1,124 +1,211 @@
-import { Hono } from 'hono';
-import { cors } from 'hono/cors';
-import { healthResponseSchema, timeseriesHealthResponseSchema } from '@burn-rate/api-schema';
-import { createDb } from '@burn-rate/db';
-import { createAuth, type AuthEnv } from './auth';
-import { getSql } from './db';
+import { OpenAPIHono } from '@hono/zod-openapi';
+import type { ContentfulStatusCode } from 'hono/utils/http-status';
+import { HTTPException } from 'hono/http-exception';
+import { KNOWN_METRICS } from '@burn-rate/api-schema';
+import { getSql, type Sql } from './db';
+import { AuthError, assertTrustedMutation, readAuthConfig, type AuthEnvironment } from './auth-config';
+import { getAuthSession, handleAuthRequest, type AuthSession } from './auth';
+import { authenticateIngestionToken, createIngestionToken, listIngestionTokens, revokeIngestionToken } from './tokens';
+import { CryptoFailure, encryptDump, type CryptoConfig } from './crypto';
+import { InvalidSampleQuery, listEncryptedSamples, storeEncryptedSamples } from './encrypted-store';
 import { mapPayload } from './ingest';
-import { storeSamples } from './store';
+import { enforceRateLimit, positiveLimit, readBoundedBody, RequestFailure } from './limits';
+import { registerApiRoutes, type ApiEnvironment, type ApiRequest } from './routes';
 
-export interface Env extends AuthEnv {
+export interface Env extends AuthEnvironment, CryptoConfig {
   HOOK_DUMPS: R2Bucket;
   TIMESERIES_DB: Hyperdrive;
+  MAX_UPLOAD_BYTES?: string;
+  UPLOADS_PER_MINUTE?: string;
+  AUTH_ATTEMPTS_PER_MINUTE?: string;
+  TOKENS_PER_MINUTE?: string;
 }
 
-function dashboardOrigin(env: Env): string {
-  return env.DASHBOARD_URL ?? 'http://localhost:5173';
-}
+interface RequestState { sql?: Promise<Sql>; session?: AuthSession; allowedOrigin?: string }
 
-async function handleTimeseriesHealth(env: Env): Promise<Response> {
-  const sql = await getSql(env);
-  try {
-    const { rows } = await sql.query('select version() as version');
-    return Response.json(
-      timeseriesHealthResponseSchema.parse({ status: 'ok', version: rows[0].version })
-    );
-  } finally {
-    await sql.end().catch(() => {});
-  }
-}
-
-async function handleHook(request: Request, env: Env, url: URL): Promise<Response> {
-  const rawBody = await request.text();
-  let body: unknown = rawBody;
-  try {
-    body = JSON.parse(rawBody);
-  } catch {
-    // Not JSON — store the raw text as-is.
-  }
-
-  const receivedAt = new Date().toISOString();
-  const dump = {
-    receivedAt,
-    method: request.method,
-    path: url.pathname,
-    query: Object.fromEntries(url.searchParams),
-    headers: Object.fromEntries(request.headers),
-    body
+/** Services and connections are constructed lazily, once per request, and always cleaned up. */
+export function createApp(connect: (env: Env) => Promise<Sql> = getSql) {
+  const app = new OpenAPIHono<ApiEnvironment<Env>>();
+  const states = new WeakMap<Request, RequestState>();
+  const sqlFor = (request: Request, env: Env) => {
+    const state = states.get(request)!;
+    return state.sql ??= connect(env);
+  };
+  const sessionFor = (ctx: ApiRequest<Env>) => {
+    const session = states.get(ctx.request)?.session;
+    if (!session) throw new AuthError(401, 'unauthorized', 'A valid session is required');
+    return session;
   };
 
-  const key = `hook/${receivedAt}-${crypto.randomUUID()}.json`;
-  await env.HOOK_DUMPS.put(key, JSON.stringify(dump, null, 2));
-
-  // Keep log lines tiny (big bodies exceed log size limits) — payloads live in R2.
-  console.log(`[hook] ${request.method} ${url.pathname} dumped to ${key} (${rawBody.length} byte body)`);
-
-  // Ingest pipeline: detect format → select mapper → map/filter → store.
-  // Raw payload is already safe in R2, so storage failures are reported but
-  // nothing is lost.
-  const ingest = mapPayload(body, key);
-
-  if (ingest.format === 'unknown') {
-    console.log(`[ingest] unrecognized payload shape; raw dump kept at ${key}`);
-    return Response.json({ ok: true, dumpKey: key, ingest: { ...ingest, samples: undefined } });
-  }
-
-  let stored = 0;
-  if (ingest.samples.length > 0) {
-    const sql = await getSql(env);
-    try {
-      stored = await storeSamples(sql, ingest.samples);
-    } catch (error) {
-      console.error(`[ingest] storage failed for ${key}:`, error);
-      return Response.json(
-        { ok: false, dumpKey: key, error: 'timeseries-storage-failed', ingest: { ...ingest, samples: undefined } },
-        { status: 502 }
-      );
-    } finally {
-      await sql.end().catch(() => {});
+  app.use('*', async (c, next) => {
+    const state: RequestState = {};
+    states.set(c.req.raw, state);
+    c.set('requestId', crypto.randomUUID());
+    c.header('X-Request-Id', c.get('requestId'));
+    try { await next(); }
+    finally {
+      // Hono does not merge prepared headers into a raw Response. Set response
+      // policy after handlers (including Better Auth) have finalized it.
+      c.header('X-Request-Id', c.get('requestId'));
+      const path = new URL(c.req.url).pathname;
+      if (path !== '/health' && path !== '/openapi.json') c.header('Cache-Control', 'no-store');
+      if (path.startsWith('/api/') || path === '/timeseries/health') {
+        c.header('Vary', 'Origin');
+        if (state.allowedOrigin) {
+          c.header('Access-Control-Allow-Origin', state.allowedOrigin);
+          c.header('Access-Control-Allow-Credentials', 'true');
+        }
+      }
+      if (state.sql) {
+        const sql = await state.sql.catch(() => undefined);
+        await sql?.end().catch(() => {});
+      }
+      states.delete(c.req.raw);
     }
-  }
+  });
 
-  console.log(
-    `[ingest] ${ingest.format}: received=${ingest.received} stored=${stored} dropped=${ingest.dropped}` +
-      (ingest.dropped > 0 ? ` droppedBy=${JSON.stringify(ingest.droppedBy)}` : '')
-  );
+  app.use('*', async (c, next) => {
+    const path = new URL(c.req.url).pathname;
+    if (path !== '/health' && path !== '/openapi.json') c.header('Cache-Control', 'no-store');
+    const isBrowserApi = path.startsWith('/api/') || path === '/timeseries/health';
+    if (isBrowserApi) {
+      const config = readAuthConfig(c.env);
+      const origin = c.req.header('Origin');
+      c.header('Vary', 'Origin');
+      if (origin && config.trustedOrigins.includes(origin)) {
+        states.get(c.req.raw)!.allowedOrigin = origin;
+        c.header('Access-Control-Allow-Origin', origin);
+        c.header('Access-Control-Allow-Credentials', 'true');
+      }
+      if (c.req.method === 'OPTIONS') {
+        if (!origin || !config.trustedOrigins.includes(origin)) throw new AuthError(403, 'untrusted-origin', 'The request origin is not allowed');
+        const requestedMethod = c.req.header('Access-Control-Request-Method');
+        const requestedHeaders = (c.req.header('Access-Control-Request-Headers') ?? '').split(',').map(h => h.trim().toLowerCase()).filter(Boolean);
+        if (!requestedMethod || !['GET', 'POST', 'DELETE'].includes(requestedMethod) || requestedHeaders.some(h => h !== 'content-type')) {
+          throw new AuthError(403, 'untrusted-preflight', 'The requested cross-origin operation is not allowed');
+        }
+        c.header('Access-Control-Allow-Methods', 'GET, POST, DELETE');
+        c.header('Access-Control-Allow-Headers', 'Content-Type');
+        return c.body(null, 204);
+      }
+      assertTrustedMutation(c.req.raw, config);
+      if (!path.startsWith('/api/auth/')) {
+        const session = await getAuthSession(await sqlFor(c.req.raw, c.env), c.env, c.req.raw.headers);
+        if (!session) throw new AuthError(401, 'unauthorized', 'A valid session is required');
+        states.get(c.req.raw)!.session = session;
+      }
+    }
+    await next();
+  });
 
-  return Response.json({ ok: true, dumpKey: key, stored, ingest: { ...ingest, samples: undefined } });
+  app.all('/api/auth/*', async c => {
+    const path = new URL(c.req.url).pathname;
+    const sql = await sqlFor(c.req.raw, c.env);
+    if (/\/(onboarding\/context|generate-register-options|verify-registration|generate-authenticate-options|verify-authentication)$/.test(path)) {
+      const identity = `${readAuthConfig(c.env).secret}:${c.req.header('CF-Connecting-IP') ?? 'unknown'}`;
+      await enforceRateLimit(sql, 'auth', identity, positiveLimit(c.env.AUTH_ATTEMPTS_PER_MINUTE, 10, 1000));
+    }
+    let request = c.req.raw;
+    if (!['GET', 'HEAD'].includes(request.method)) {
+      const body = await readBoundedBody(request, 64 * 1024);
+      request = new Request(request, { body });
+    }
+    return handleAuthRequest(request, sql, c.env);
+  });
+
+  registerApiRoutes(app, {
+    async timeseriesHealth(ctx) {
+      const { rows } = await (await sqlFor(ctx.request, ctx.env)).query('select version() as version');
+      return Response.json({ status: 'ok', version: rows[0].version });
+    },
+    async getCurrentUser(ctx) {
+      const { user } = sessionFor(ctx);
+      return Response.json({ id: user.id, name: user.name });
+    },
+    async listMetrics() {
+      return Response.json({ items: Object.entries(KNOWN_METRICS).map(([id, metric]) => ({ id, ...metric })) });
+    },
+    async listHealthSamples(ctx, query) {
+      return Response.json(await listEncryptedSamples(await sqlFor(ctx.request, ctx.env), ctx.env, sessionFor(ctx).user.id, query));
+    },
+    async createIngestionToken(ctx, input) {
+      const session = sessionFor(ctx);
+      const sql = await sqlFor(ctx.request, ctx.env);
+      await enforceRateLimit(sql, 'token-create', session.user.id, positiveLimit(ctx.env.TOKENS_PER_MINUTE, 10, 100));
+      const { token: secret, ...token } = await createIngestionToken(sql, session, input.name);
+      return Response.json({ token, secret }, { status: 201 });
+    },
+    async listIngestionTokens(ctx) {
+      return Response.json({ items: await listIngestionTokens(await sqlFor(ctx.request, ctx.env), sessionFor(ctx).user.id) });
+    },
+    async revokeIngestionToken(ctx, id) {
+      if (!await revokeIngestionToken(await sqlFor(ctx.request, ctx.env), sessionFor(ctx).user.id, id)) {
+        throw new RequestFailure(404, 'not-found', 'Credential not found');
+      }
+      return Response.json({ revoked: true });
+    },
+    async ingest(ctx) {
+      // Invalid credentials are rejected before reading or retaining the body.
+      const authorization = ctx.request.headers.get('Authorization');
+      if (!authorization?.startsWith('Bearer ')) throw new AuthError(401, 'unauthorized', 'A valid ingestion bearer token is required');
+      const sql = await sqlFor(ctx.request, ctx.env);
+      const ownerId = await authenticateIngestionToken(sql, authorization);
+      if (!ownerId) throw new AuthError(401, 'unauthorized', 'A valid ingestion bearer token is required');
+      await enforceRateLimit(sql, 'upload', ownerId, positiveLimit(ctx.env.UPLOADS_PER_MINUTE, 60, 10000));
+      const raw = await readBoundedBody(ctx.request, positiveLimit(ctx.env.MAX_UPLOAD_BYTES, 5 * 1024 * 1024, 25 * 1024 * 1024));
+      let body: unknown = raw;
+      try { body = JSON.parse(raw); } catch { /* Unknown/non-JSON captures remain encrypted. */ }
+      const dumpId = crypto.randomUUID();
+      const dumpKey = `encrypted/${ownerId}/${dumpId}.json`;
+      const receivedAt = new Date().toISOString();
+      const contentType = ctx.request.headers.get('content-type')?.split(';')[0];
+      const dump = {
+        receivedAt, method: 'POST', path: '/hook',
+        headers: contentType && ['application/json', 'text/plain', 'application/octet-stream'].includes(contentType) ? { 'content-type': contentType } : {},
+        body
+      };
+      let ingest: ReturnType<typeof mapPayload> | undefined;
+      let retained = false;
+      try {
+        const envelope = await encryptDump(sql, ctx.env, ownerId, dumpKey, dump);
+        const storedDump = await ctx.env.HOOK_DUMPS.put(dumpKey, JSON.stringify(envelope), {
+          httpMetadata: { contentType: 'application/json' }, customMetadata: { encrypted: '1', ownerId }
+        });
+        if (!storedDump) throw new Error('dump-write-failed');
+        retained = true;
+        ingest = mapPayload(body, dumpKey, ownerId);
+        const stored = await storeEncryptedSamples(sql, ctx.env, ownerId, ingest.samples);
+        const counters = { format: ingest.format, received: ingest.received, mapped: ingest.mapped, dropped: ingest.dropped,
+          droppedBy: ingest.dropped ? { unsupported: ingest.dropped } : {} };
+        console.info(JSON.stringify({ requestId: ctx.requestId, code: 'upload-accepted', received: counters.received, stored, dropped: counters.dropped }));
+        return Response.json({ ok: true, dumpKey, stored, ingest: counters });
+      } catch {
+        console.error(JSON.stringify({ requestId: ctx.requestId, code: retained ? 'sample-storage-failed' : 'dump-storage-failed' }));
+        return Response.json({ ok: false, ...(retained ? { dumpKey } : {}), error: retained ? 'timeseries-storage-failed' : 'encrypted-dump-storage-failed',
+          ...(ingest ? { ingest: { format: ingest.format, received: ingest.received, mapped: ingest.mapped, dropped: ingest.dropped, droppedBy: {} } } : {}) }, { status: 502 });
+      }
+    }
+  });
+
+  app.all('/hook', c => {
+    c.header('Allow', 'POST');
+    return c.json({ error: { code: 'method-not-allowed', message: 'Only POST is accepted', requestId: c.get('requestId') } }, 405);
+  });
+  app.notFound(c => c.json({ error: { code: 'not-found', message: 'Not found', requestId: c.get('requestId') } }, 404));
+  app.onError((error, c) => {
+    let status = 503;
+    let code = 'service-unavailable';
+    let message = 'Service is temporarily unavailable';
+    if (error instanceof AuthError || error instanceof RequestFailure) {
+      status = error.status; code = error.code; message = error.message;
+    } else if (error instanceof HTTPException && error.status === 400) { status = 400; code = 'invalid-request'; message = 'Invalid request body'; }
+    else if (error instanceof InvalidSampleQuery) { status = 400; code = error.code; message = error.message; }
+    else if (error instanceof CryptoFailure) { code = error.code; }
+    if (status === 429) c.header('Retry-After', '60');
+    c.header('Cache-Control', 'no-store');
+    return c.json({ error: { code, message, requestId: c.get('requestId') } }, status as ContentfulStatusCode);
+  });
+  return app;
 }
 
-const app = new Hono<{ Bindings: Env }>();
-
-// Cross-origin auth from the dashboard: explicit origin + credentials so the
-// session cookie round-trips. Must match trustedOrigins in src/auth.ts.
-app.use(
-  '/api/auth/*',
-  cors({
-    origin: (origin, c) => (origin === dashboardOrigin(c.env) ? origin : undefined),
-    credentials: true,
-    allowHeaders: ['Content-Type', 'Authorization'],
-    allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']
-  })
-);
-
-app.get('/health', (c) =>
-  c.json(healthResponseSchema.parse({ status: 'ok', service: 'burn-rate-api' }))
-);
-
-app.get('/timeseries/health', (c) => handleTimeseriesHealth(c.env));
-
-app.post('/hook', (c) => handleHook(c.req.raw, c.env, new URL(c.req.url)));
-
-// Better Auth (passkey-only). One short-lived db pool per request — Hyperdrive
-// pools at the edge, and pg connects lazily so this stays cheap.
-app.all('/api/auth/*', async (c) => {
-  const { db, end } = createDb(c.env.TIMESERIES_DB.connectionString, { max: 1 });
-  try {
-    const auth = createAuth(db, c.env);
-    return await auth.handler(c.req.raw);
-  } finally {
-    await end().catch(() => {});
-  }
-});
-
-export default app;
+export default createApp();

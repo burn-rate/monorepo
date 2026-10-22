@@ -1,0 +1,1205 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Burn Rate API",
+    "version": "1.0.0",
+    "description": "Application contracts. Better Auth endpoints at /api/auth/* use Better Auth and passkeyClient contracts and are intentionally not duplicated here."
+  },
+  "components": {
+    "securitySchemes": {
+      "sessionCookie": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "better-auth.session_token",
+        "description": "Better Auth HttpOnly session cookie; production uses its Secure-prefixed variant. Set credentials: include in browser Fetch. WebAuthn ceremonies use Better Auth passkeyClient."
+      },
+      "ingestionBearer": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Per-user revocable exporter credential. Never authorizes account or health reads."
+      }
+    },
+    "schemas": {
+      "HealthResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok"
+            ]
+          },
+          "service": {
+            "type": "string",
+            "enum": [
+              "burn-rate-api"
+            ]
+          }
+        },
+        "required": [
+          "status",
+          "service"
+        ]
+      },
+      "TimeseriesHealthResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok"
+            ]
+          },
+          "version": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "version"
+        ]
+      },
+      "ApiError": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              },
+              "requestId": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "code",
+              "message",
+              "requestId"
+            ]
+          }
+        },
+        "required": [
+          "error"
+        ]
+      },
+      "CurrentUser": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ]
+      },
+      "MetricsResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "enum": [
+                    "active_energy_burned",
+                    "active_energy_goal",
+                    "basal_energy_burned",
+                    "stand_time",
+                    "stand_hour",
+                    "stand_hours_goal",
+                    "exercise_time",
+                    "exercise_time_goal",
+                    "move_time",
+                    "move_time_goal",
+                    "heart_rate",
+                    "resting_heart_rate",
+                    "heart_rate_variability"
+                  ]
+                },
+                "displayName": {
+                  "type": "string"
+                },
+                "category": {
+                  "type": "string",
+                  "enum": [
+                    "activity",
+                    "vitals"
+                  ]
+                },
+                "unit": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "displayName",
+                "category",
+                "unit"
+              ]
+            }
+          }
+        },
+        "required": [
+          "items"
+        ]
+      },
+      "HealthSamplesResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "metric": {
+                  "type": "string",
+                  "enum": [
+                    "active_energy_burned",
+                    "active_energy_goal",
+                    "basal_energy_burned",
+                    "stand_time",
+                    "stand_hour",
+                    "stand_hours_goal",
+                    "exercise_time",
+                    "exercise_time_goal",
+                    "move_time",
+                    "move_time_goal",
+                    "heart_rate",
+                    "resting_heart_rate",
+                    "heart_rate_variability"
+                  ]
+                },
+                "time": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "endedAt": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "value": {
+                  "type": "number"
+                },
+                "valueMin": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "valueMax": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "unit": {
+                  "type": "string"
+                },
+                "sourceName": {
+                  "type": "string"
+                },
+                "device": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "extId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              },
+              "required": [
+                "id",
+                "metric",
+                "time",
+                "endedAt",
+                "value",
+                "valueMin",
+                "valueMax",
+                "unit",
+                "sourceName",
+                "device",
+                "extId"
+              ]
+            }
+          },
+          "nextCursor": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "items",
+          "nextCursor"
+        ]
+      },
+      "CreatedIngestionToken": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "createdAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "revokedAt": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "date-time"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "createdAt",
+              "revokedAt"
+            ]
+          },
+          "secret": {
+            "type": "string",
+            "description": "Returned once. Store securely; it cannot be retrieved later."
+          }
+        },
+        "required": [
+          "token",
+          "secret"
+        ]
+      },
+      "CreateIngestionToken": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "IngestionTokensResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "createdAt": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "revokedAt": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "date-time"
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "createdAt",
+                "revokedAt"
+              ]
+            }
+          }
+        },
+        "required": [
+          "items"
+        ]
+      },
+      "RevokedIngestionToken": {
+        "type": "object",
+        "properties": {
+          "revoked": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          }
+        },
+        "required": [
+          "revoked"
+        ]
+      },
+      "HookSuccess": {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          },
+          "dumpKey": {
+            "type": "string"
+          },
+          "stored": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "ingest": {
+            "type": "object",
+            "properties": {
+              "format": {
+                "type": "string",
+                "enum": [
+                  "health-exporter-v1",
+                  "metrics-v1",
+                  "unknown"
+                ]
+              },
+              "received": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "mapped": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "dropped": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "droppedBy": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              }
+            },
+            "required": [
+              "format",
+              "received",
+              "mapped",
+              "dropped",
+              "droppedBy"
+            ]
+          }
+        },
+        "required": [
+          "ok",
+          "dumpKey",
+          "ingest"
+        ]
+      },
+      "HookStorageFailure": {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "enum": [
+              false
+            ]
+          },
+          "dumpKey": {
+            "type": "string"
+          },
+          "error": {
+            "type": "string"
+          },
+          "ingest": {
+            "type": "object",
+            "properties": {
+              "format": {
+                "type": "string",
+                "enum": [
+                  "health-exporter-v1",
+                  "metrics-v1",
+                  "unknown"
+                ]
+              },
+              "received": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "mapped": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "dropped": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "droppedBy": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              }
+            },
+            "required": [
+              "format",
+              "received",
+              "mapped",
+              "dropped",
+              "droppedBy"
+            ]
+          }
+        },
+        "required": [
+          "ok",
+          "error"
+        ]
+      }
+    },
+    "parameters": {}
+  },
+  "paths": {
+    "/health": {
+      "get": {
+        "operationId": "getHealth",
+        "tags": [
+          "diagnostics"
+        ],
+        "responses": {
+          "200": {
+            "description": "Public liveness.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/timeseries/health": {
+      "get": {
+        "operationId": "getTimeseriesHealth",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "tags": [
+          "diagnostics"
+        ],
+        "responses": {
+          "200": {
+            "description": "Authenticated database diagnostic.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimeseriesHealthResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "A valid session is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable; retry later.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/me": {
+      "get": {
+        "operationId": "getCurrentUser",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "tags": [
+          "account"
+        ],
+        "responses": {
+          "200": {
+            "description": "Current account.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CurrentUser"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request or cursor.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "A valid session is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Trusted origin or fresh passkey verification is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded; retry later.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable; retry later.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/metrics": {
+      "get": {
+        "operationId": "listMetrics",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "tags": [
+          "health"
+        ],
+        "responses": {
+          "200": {
+            "description": "Supported metrics.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MetricsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request or cursor.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "A valid session is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Trusted origin or fresh passkey verification is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded; retry later.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable; retry later.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/health/samples": {
+      "get": {
+        "operationId": "listHealthSamples",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "tags": [
+          "health"
+        ],
+        "description": "Samples owned by the session, ordered by time then ID. The range is [from,to), at most 31 days. Cursors are bound to the owner and filters; concurrent imports do not provide snapshot isolation.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "active_energy_burned",
+                "active_energy_goal",
+                "basal_energy_burned",
+                "stand_time",
+                "stand_hour",
+                "stand_hours_goal",
+                "exercise_time",
+                "exercise_time_goal",
+                "move_time",
+                "move_time_goal",
+                "heart_rate",
+                "resting_heart_rate",
+                "heart_rate_variability"
+              ]
+            },
+            "required": true,
+            "name": "metric",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "date-time",
+              "description": "Inclusive sample start time, with UTC or an explicit offset."
+            },
+            "required": true,
+            "description": "Inclusive sample start time, with UTC or an explicit offset.",
+            "name": "from",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "date-time",
+              "description": "Exclusive sample start time. Must be after from and at most 31 days later."
+            },
+            "required": true,
+            "description": "Exclusive sample start time. Must be after from and at most 31 days later.",
+            "name": "to",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500,
+              "default": 100
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4096
+            },
+            "required": false,
+            "name": "cursor",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Decrypted observations, or an empty items array.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthSamplesResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request or cursor.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "A valid session is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Trusted origin or fresh passkey verification is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded; retry later.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable; retry later.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/ingestion-tokens": {
+      "post": {
+        "operationId": "createIngestionToken",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "tags": [
+          "ingestion credentials"
+        ],
+        "description": "Requires passkey verification within five minutes. The secret is disclosed only once.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateIngestionToken"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created credential and its one-time secret.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreatedIngestionToken"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request or cursor.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "A valid session is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Trusted origin or fresh passkey verification is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded; retry later.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable; retry later.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "operationId": "listIngestionTokens",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "tags": [
+          "ingestion credentials"
+        ],
+        "responses": {
+          "200": {
+            "description": "Owned credentials without secrets.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestionTokensResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request or cursor.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "A valid session is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Trusted origin or fresh passkey verification is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded; retry later.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable; retry later.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/ingestion-tokens/{id}": {
+      "delete": {
+        "operationId": "revokeIngestionToken",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "tags": [
+          "ingestion credentials"
+        ],
+        "description": "Revocation is idempotent for an already revoked credential owned by the session. Foreign IDs are indistinguishable from missing IDs.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Credential revoked.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RevokedIngestionToken"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request or cursor.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "A valid session is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Trusted origin or fresh passkey verification is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Credential not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded; retry later.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable; retry later.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/hook": {
+      "post": {
+        "operationId": "uploadHealthPayload",
+        "security": [
+          {
+            "ingestionBearer": []
+          }
+        ],
+        "tags": [
+          "exporter"
+        ],
+        "description": "Exporter ingestion only. A browser session does not authorize upload. Both supported exporter formats and unknown/non-JSON captures are encrypted before retention.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {}
+            },
+            "text/plain": {
+              "schema": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Durably captured encrypted upload and mapping counters.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HookSuccess"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "A valid ingestion bearer token is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Only POST is accepted.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Payload exceeds configured byte limit.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded; retry later.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Encrypted dump or sample storage failed; retry upload.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HookStorageFailure"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable; retry later.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "webhooks": {}
+}

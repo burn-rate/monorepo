@@ -39,6 +39,15 @@ jobs:
             exit 1
           fi
 
+      - name: Apply database migrations
+        working-directory: apps/api
+        timeout-minutes: 10
+        run: pnpm db:migrate:ci
+        env:
+          DB_CONNECTION_STRING: ${{ secrets.DB_CONNECTION_STRING }}
+          # Optional CA override; the Timescale public CA is bundled in the repo.
+          DATABASE_CA_PEM: ${{ secrets.DATABASE_CA_PEM }}
+
       - name: Deploy Worker
         working-directory: apps/api
         run: pnpm exec wrangler deploy
@@ -47,6 +56,7 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID || '888e985dae423cb6bab33658a25951de' }}
 
   deploy-dashboard:
+    needs: deploy-api
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
