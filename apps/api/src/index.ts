@@ -23,7 +23,9 @@ async function handleHook(request: Request, url: URL): Promise<Response> {
     body
   });
 
-  return Response.json({ ok: true });
+  // Echo the payload back so large bodies stay inspectable regardless of
+  // log size limits (Workers Logs truncates stored log lines).
+  return Response.json({ ok: true, received: body });
 }
 
 export default {
