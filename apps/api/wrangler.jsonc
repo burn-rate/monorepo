@@ -3,6 +3,7 @@
   "name": "burn-rate-api",
   "main": "src/index.ts",
   "compatibility_date": "2026-10-21",
+  "compatibility_flags": ["nodejs_compat"],
   "observability": {
     "enabled": true
   },
@@ -18,6 +19,12 @@
     {
       "binding": "HOOK_DUMPS",
       "bucket_name": "burn-rate-hook-dumps"
+    }
+  ],
+  "hyperdrive": [
+    {
+      "binding": "TIMESERIES_DB",
+      "id": "2985aac84d524fbdb926e35d5cdf3eb2"
     }
   ]
 }

@@ -1,0 +1,64 @@
+{
+  "data": {
+    "metrics": [
+      {
+        "name": "heart_rate",
+        "units": "count/min",
+        "data": [
+          { "source": "Chris’s Apple Watch", "Max": 79, "Min": 79, "date": "2026-10-21 00:06:03 -0700", "Avg": 79 },
+          { "Max": 80, "Min": 80, "date": "2026-10-22 10:50:23 -0700", "Avg": 80, "source": "Chris’s Apple Watch" }
+        ]
+      },
+      {
+        "name": "apple_stand_time",
+        "units": "min",
+        "data": [
+          { "date": "2026-10-21 00:15:00 -0700", "qty": 0.2, "source": "Chris’s Apple Watch" },
+          { "date": "2026-10-22 10:34:00 -0700", "qty": 0.4, "source": "Chris’s Apple Watch" }
+        ]
+      },
+      {
+        "name": "apple_stand_hour",
+        "units": "count",
+        "data": [
+          { "source": "Chris’s Apple Watch", "date": "2026-10-21 00:00:00 -0700", "qty": 1 }
+        ]
+      },
+      {
+        "name": "active_energy",
+        "units": "kcal",
+        "data": [
+          { "qty": 0.04072403270390986, "source": "Chris’s Apple Watch", "date": "2026-10-21 00:09:00 -0700" }
+        ]
+      },
+      {
+        "name": "basal_energy_burned",
+        "units": "kcal",
+        "data": [
+          { "qty": 0.8335498751520592, "source": "Chris’s Apple Watch", "date": "2026-10-21 00:01:00 -0700" }
+        ]
+      },
+      {
+        "name": "step_count",
+        "units": "count",
+        "data": [
+          { "qty": 22, "date": "2026-10-22 10:35:00 -0700", "source": "Chris’s Apple Watch|Cmgriffing" }
+        ]
+      },
+      {
+        "name": "sleep_analysis",
+        "units": "hr",
+        "data": [
+          { "core": 3.18, "deep": 0.51, "awake": 0.16, "asleep": 0, "date": "2026-10-22 00:00:00 -0700", "source": "Chris’s Apple Watch" }
+        ]
+      },
+      {
+        "name": "heart_rate_variability",
+        "units": "ms",
+        "data": [
+          { "date": "not-a-date", "qty": 49.27, "source": "Chris’s Apple Watch" }
+        ]
+      }
+    ]
+  }
+}
