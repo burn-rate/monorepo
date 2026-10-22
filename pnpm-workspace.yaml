@@ -12,3 +12,4 @@ minimumReleaseAgeExclude:
   - '@astrojs/telemetry@3.4.1'
   - '@cloudflare/workers-types@5.20261022.1'
   - astro@7.4.2
+  - '@aws-sdk/client-s3@3.1156.0'

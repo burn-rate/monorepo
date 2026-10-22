@@ -2,3 +2,19 @@
 # for the TIMESERIES_DB Hyperdrive binding instead of the cloud config.
 # Example: postgresql://postgres:password@localhost:5432/burn_rate
 CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_TIMESERIES_DB=""
+
+# Local passkey and frontend topology. Set real secrets privately.
+AUTH_BASE_URL="http://localhost:8787"
+DASHBOARD_ORIGINS='["http://localhost:5173"]'
+PASSKEY_RP_ID="localhost"
+PASSKEY_RP_NAME="Burn Rate local"
+AUTH_COOKIE_SAME_SITE="lax"
+AUTH_SECRET=""
+ENCRYPTION_ENVIRONMENT="local"
+HEALTH_KEK_ID="local-v1"
+# JSON map: {"local-v1":"<base64url-encoded 32 random bytes>"}
+HEALTH_KEKS=""
+MAX_UPLOAD_BYTES="5242880"
+UPLOADS_PER_MINUTE="60"
+AUTH_ATTEMPTS_PER_MINUTE="10"
+TOKENS_PER_MINUTE="10"

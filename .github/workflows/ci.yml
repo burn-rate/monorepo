@@ -21,6 +21,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Verify generated API contracts and SDK
+        run: pnpm check:generated
+
       - name: Typecheck and lint
         run: pnpm check
 

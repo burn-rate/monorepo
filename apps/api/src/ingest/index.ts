@@ -12,7 +12,7 @@ export interface IngestResult extends IngestStats {
  * to normalized samples. Unknown metrics are dropped (counted in the stats)
  * rather than stored.
  */
-export function mapPayload(body: unknown, dumpKey: string, userId = 'default'): IngestResult {
+export function mapPayload(body: unknown, dumpKey: string, userId: string): IngestResult {
   const format = detectFormat(body);
 
   let result: MapResult;

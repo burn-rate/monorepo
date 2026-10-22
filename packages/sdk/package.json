@@ -1,0 +1,19 @@
+{
+  "name": "@burn-rate/sdk",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./client": "./src/generated/client/index.ts"
+  },
+  "scripts": {
+    "generate": "openapi-ts -f openapi-ts.config.ts",
+    "check": "tsc --noEmit",
+    "test": "vitest run --pool=threads"
+  },
+  "devDependencies": {
+    "typescript": "^6.0.0",
+    "vitest": "^3.2.4"
+  }
+}

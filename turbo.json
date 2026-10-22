@@ -2,20 +2,30 @@
   "$schema": "https://turborepo.dev/schema.json",
   "globalDependencies": ["tsconfig.base.json"],
   "tasks": {
+    "@burn-rate/api#generate": {
+      "inputs": ["src/routes.ts", "../../packages/api-schema/src/**", "../../scripts/export-openapi.mts"],
+      "outputs": ["../../openapi/openapi.json"]
+    },
+    "@burn-rate/sdk#generate": {
+      "dependsOn": ["@burn-rate/api#generate"],
+      "inputs": ["openapi-ts.config.ts", "../../openapi/openapi.json"],
+      "outputs": ["src/generated/**"]
+    },
+    "generate": { "outputs": [] },
     "dev": {
       "cache": false,
       "persistent": true
     },
     "build": {
-      "dependsOn": ["^build"],
+      "dependsOn": ["^build", "generate", "^generate"],
       "outputs": ["dist/**", "build/**", ".svelte-kit/**", "!.svelte-kit/cache/**"]
     },
     "check": {
-      "dependsOn": ["^check"],
+      "dependsOn": ["^check", "generate", "^generate"],
       "outputs": []
     },
     "test": {
-      "dependsOn": ["^build"],
+      "dependsOn": ["^build", "generate", "^generate"],
       "outputs": []
     }
   }

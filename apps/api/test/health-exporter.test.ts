@@ -6,7 +6,7 @@ import fixture from './fixtures/health-exporter-v1.json';
 const dumpKey = 'hook/2026-10-22T18:09:02.961Z-fixture.json';
 
 describe('mapPayload: health-exporter-v1', () => {
-  const result = mapPayload(fixture, dumpKey);
+  const result = mapPayload(fixture, dumpKey, 'fixture-owner');
 
   it('reports stats: 5 received, 11 mapped, 1 dropped', () => {
     // 3 known quantity samples (StepCount dropped) + 1 activitySummary
@@ -21,7 +21,7 @@ describe('mapPayload: health-exporter-v1', () => {
   it('maps quantity samples with uuid extId, device, and NBSP-normalized source', () => {
     const active = result.samples.find((s) => s.metric === 'active_energy_burned' && s.extId?.startsWith('5D666A56'));
     expect(active).toMatchObject({
-      userId: 'default',
+      userId: 'fixture-owner',
       value: 0.187,
       unit: 'kcal',
       sourceName: 'Allan’s Apple Watch', // \u00a0 → space

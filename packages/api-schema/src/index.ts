@@ -14,3 +14,4 @@ export type HealthResponse = z.infer<typeof healthResponseSchema>;
 
 export * from './metrics';
 export * from './normalized-sample';
+export * from './frontend-api';

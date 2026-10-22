@@ -9,6 +9,7 @@ apps/
   marketing/    Static Astro marketing site
 packages/
   api-schema/   Shared Zod schemas and inferred TypeScript API types
+  sdk/          Generated Hey API client and request-scoped Fetch helpers
   design-tokens/ Simpsons donut theme: CSS custom properties and TS tokens
 ```
 
@@ -44,12 +45,15 @@ Run an individual app with `pnpm --filter @burn-rate/api dev` (or `@burn-rate/da
 
 ```sh
 pnpm check  # Type checking across the workspace
+pnpm test   # Mapping, auth, crypto, persistence, route, and SDK checks
 pnpm build  # Build frontends and bundle the Worker without deploying
+pnpm generate  # Offline OpenAPI export and generated SDK
+pnpm check:generated  # Detect tracked and untracked generated output drift
 ```
 
 ## API and databases
 
-The Worker exposes `GET /health` as a starter route. Its response schema and TypeScript type live in `@burn-rate/api-schema`, which both the API and dashboard can import directly. Workspace source is bundled by the consuming app, so the shared package needs no separate build step.
+The Hono Worker exposes public `GET /health` and `/openapi.json`, Better Auth passkey endpoints under `/api/auth/*`, session-protected account/metric/sample reads, and ingestion-token management. Runtime Zod contracts live in `@burn-rate/api-schema`; `@burn-rate/sdk` is generated offline from those route contracts. See the [frontend SDK handoff](packages/sdk/README.md), [passkey contract](docs/auth-handoff.md), and [deployment instructions](docs/api-deployment.md).
 
 TimescaleDB/Postgres is the planned single application database. Activity
 observations use Timescale hypertables; users, treats, loans, decisions, balances,
@@ -63,13 +67,38 @@ the former D1 binding has been removed from the Worker configuration.
 
 ## Timeseries database
 
-Schema lives in `apps/api/timescale/`. Apply the init script with psql:
+Schema lives in `apps/api/timescale/`. Fresh initialization creates the metric
+registry, encrypted health storage, auth, and token tables directly with the
+checksummed migration runner:
 
 ```sh
-psql "$TIMESERIES_DB_URL" -f apps/api/timescale/001_init.sql
+pnpm db:migrate
 ```
 
-It creates the `metrics` registry, the `health_samples` hypertable (dedup key: `user_id, metric, time, ended_at, source_name`), columnstore policies, and the `health_daily` continuous aggregate.
+Load the intended `DATABASE_URL` or `DB_CONNECTION_STRING` privately;
+`apps/api/.env` can supply the local operator connection and must never be
+committed or exposed to the frontend. Timescale connections automatically use
+the [bundled public CA](apps/api/certs/README.md) with certificate and hostname
+verification. `DATABASE_CA_FILE` can override it for a different database CA.
+Fresh initialization creates no plaintext sample table or daily aggregate.
+Historical `001_init.sql` is not a fresh-install prerequisite. No legacy
+ownership mapping, backfill, or destructive cutover is needed when no legacy
+data exists. On 2026-10-22, inspection found 127 plaintext sample rows; the user
+confirmed they were disposable and authorized their removal. The guarded
+cleanup committed removal of `public.health_samples` and the empty
+`public.health_daily` aggregate, removed their two legacy policies, preserved
+the metric registry, and passed the deployment preflight. R2 objects were
+unchanged. Pause exporters until the encrypted Worker is deployed: the old
+Worker can still retain a plaintext R2 dump before its SQL write fails.
+Encrypted application migrations and Worker deployment have not run as part of
+this cleanup. The optional `pnpm db:cutover` applies only to an environment with
+actual legacy data after verified owner-mapped encryption backfill. Follow the
+[encryption operations runbook](docs/encryption-operations.md); migrations and
+deployment run in order through the GitHub Actions deploy workflow on `main`.
+Configure its `DB_CONNECTION_STRING` secret before merging; the Timescale CA is
+included in the repo. `DATABASE_CA_PEM` is an optional override. A migration
+failure blocks Worker deployment; successful files are recorded and skipped
+on retry.
 
 The development Hyperdrive ID is configured in `apps/api/wrangler.jsonc`. For a
 new environment, create a Hyperdrive config pointed at its origin database and
@@ -83,11 +112,9 @@ For local development, copy `.dev.vars.example` to `.dev.vars` and set `CLOUDFLA
 
 ## Ingest pipeline
 
-`POST /hook` accepts health payloads in either known shape — `health-exporter.v1` batches (`{schemaVersion, samples: [...]}`) or metrics exports (`{data: {metrics: [...]}}`). The pipeline dumps the raw payload to R2 (lineage), detects the format, maps it to the normalized sample schema in `@burn-rate/api-schema` (unknown metrics are dropped and logged), and upserts into `health_samples`. Run the mapping tests with:
+`POST /hook` requires a user-bound ingestion bearer token and accepts the existing `health-exporter.v1` and metrics-export payloads. It authenticates before retention, applies payload/rate limits, redacts request credentials, and durably encrypts raw R2 dumps before mapping and encrypted sample upserts. Unknown formats receive the same encryption. Owner identity comes only from the token; explicit owner IDs are required throughout mapping. Retry/correction preserves logical sample IDs. Protected sample values and source/device identities are encrypted; metric/time metadata remains readable.
 
-```sh
-pnpm --filter @burn-rate/api exec vitest run
-```
+Use `pnpm --filter @burn-rate/api test` for the mapping and backend integration suite. The tests use embedded Postgres and cryptographic WebAuthn fixtures; real-device staging and representative Timescale migration/policy checks remain part of rollout.
 
 The dashboard uses SvelteKit's automatic adapter until a hosting target is selected. The marketing site builds to static files. Cloud resources are configured separately from the local build.
 

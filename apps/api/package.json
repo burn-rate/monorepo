@@ -7,14 +7,27 @@
     "dev": "wrangler dev --port 8787 --ip 0.0.0.0 --env-file .dev.vars",
     "tail": "wrangler tail burn-rate-api --format pretty",
     "build": "wrangler deploy --dry-run --outdir dist",
-    "check": "tsc --noEmit"
+    "check": "tsc --noEmit",
+    "test": "vitest run --pool=threads",
+    "generate": "node --import tsx ../../scripts/export-openapi.mts",
+    "db:migrate": "node --import tsx scripts/migrate.ts",
+    "db:cutover": "node --import tsx scripts/migrate.ts --cutover",
+    "test:database": "node --import tsx scripts/test-database.ts",
+    "db:migrate:ci": "node --import tsx scripts/migrate-ci.ts"
   },
   "dependencies": {
+    "@better-auth/passkey": "1.7.12",
     "@burn-rate/api-schema": "workspace:*",
+    "@hono/zod-openapi": "1.6.3",
+    "better-auth": "1.7.12",
+    "hono": "4.13.13",
+    "kysely": "0.29.7",
     "pg": "^8.23.1"
   },
   "devDependencies": {
+    "@aws-sdk/client-s3": "3.1156.0",
     "@cloudflare/workers-types": "^5.20261022.1",
+    "@electric-sql/pglite": "0.5.3",
     "@types/pg": "^8.23.1",
     "typescript": "^6.0.0",
     "vitest": "^3.2.4",

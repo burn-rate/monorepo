@@ -133,7 +133,7 @@ function mapActivitySummary(
 export function mapHealthExporter(
   body: HealthExporterPayload,
   dumpKey: string,
-  userId = 'default'
+  userId: string
 ): MapResult {
   const drops = new DropLog();
   const samples: NormalizedSample[] = [];

@@ -19,7 +19,7 @@ describe('parseOffsetDate', () => {
 });
 
 describe('mapPayload: metrics-v1', () => {
-  const result = mapPayload(fixture, dumpKey);
+  const result = mapPayload(fixture, dumpKey, 'fixture-owner');
 
   it('reports stats: 10 received, 7 mapped, 3 dropped', () => {
     // received counts every raw point, including points from unknown metrics;

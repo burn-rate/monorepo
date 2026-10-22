@@ -44,7 +44,7 @@ function normalizeUnit(units: string | undefined, metric: KnownMetricName): stri
 export function mapMetricsExport(
   body: MetricsExportPayload,
   dumpKey: string,
-  userId = 'default'
+  userId: string
 ): MapResult {
   const drops = new DropLog();
   const samples: NormalizedSample[] = [];

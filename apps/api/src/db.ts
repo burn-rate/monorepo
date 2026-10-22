@@ -12,11 +12,17 @@ export type Sql = pg.Client;
  * SSL — the proxy speaks TLS to the origin itself, and forcing SSL from pg
  * fails the SSLRequest handshake against the local proxy.
  */
-export async function getSql(env: { TIMESERIES_DB: Hyperdrive }): Promise<Sql> {
+export async function getSql(env: { TIMESERIES_DB: Pick<Hyperdrive, 'connectionString'> }): Promise<Sql> {
   const client = new pg.Client({
     connectionString: env.TIMESERIES_DB.connectionString,
+    connectionTimeoutMillis: 10_000,
     statement_timeout: 10_000
   });
-  await client.connect();
-  return client;
+  try {
+    await client.connect();
+    return client;
+  } catch {
+    await client.end().catch(() => {});
+    throw new Error('Database connection unavailable');
+  }
 }
