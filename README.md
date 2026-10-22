@@ -116,4 +116,17 @@ pnpm --filter @burn-rate/api exec vitest run
 
 The dashboard uses SvelteKit's automatic adapter until a hosting target is selected. The marketing site builds to static files. Cloud resources are configured separately from the local build.
 
+## Deployment
+
+Both apps deploy to Cloudflare Workers in the `Burn Rate` account (`888e…`) on push to `main` via `.github/workflows/deploy.yml`:
+
+| App | Worker | URL |
+| --- | --- | --- |
+| API | `api` | https://api.burn-rate-app.workers.dev |
+| Dashboard | `app` | https://app.burn-rate-app.workers.dev |
+
+The WebAuthn RP ID is `burn-rate-app.workers.dev` (the account's workers.dev subdomain), which covers both hosts — required for the cross-origin passkey + session-cookie flow. Cross-origin config lives in each app's `wrangler.jsonc` `vars`: the API carries `DASHBOARD_URL`, `BETTER_AUTH_URL`, and `PASSKEY_RP_ID`; the dashboard carries `API_URL`. `BETTER_AUTH_SECRET` is a Worker secret (rotate with `wrangler secret put BETTER_AUTH_SECRET`).
+
+Note: workers.dev subdomains are effectively immutable — they can be deleted and re-claimed (`DELETE`/`PUT` on the Cloudflare `workers/subdomain` API), which breaks all existing URLs. Migrating to custom domains later means updating those vars and the RP ID together.
+
 Framework references: [Turborepo workspaces](https://turborepo.dev/docs/crafting-your-repository/structuring-a-repository), [SvelteKit project structure](https://svelte.dev/docs/kit/project-structure), [Astro setup](https://docs.astro.build/en/install-and-setup/), and [Wrangler configuration](https://developers.cloudflare.com/workers/wrangler/configuration/).
