@@ -1,0 +1,5 @@
+{
+  "extends": ["../../tsconfig.base.json", "$app/tsconfig"],
+  "include": ["src/**/*", "*.ts"],
+  "exclude": ["node_modules", "src/service-worker"]
+}

@@ -1,0 +1,3 @@
+# Optional placeholders for the future external timeseries database integration.
+TIMESERIES_DB_URL=""
+TIMESERIES_DB_TOKEN=""
