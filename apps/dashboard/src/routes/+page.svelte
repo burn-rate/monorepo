@@ -1,8 +1,3 @@
-<svelte:head>
-  <title>burn-rate dashboard</title>
-  <meta name="description" content="The burn-rate dashboard." />
-</svelte:head>
-
 <script lang="ts">
   import { authClient } from '#lib/auth-client.ts';
   import { API_URL } from '$app/env/public';
@@ -25,53 +20,50 @@
   }
 </script>
 
-<main>
-  <h1>burn<span class="dash">-</span>rate</h1>
-
-  {#if $session?.isPending}
-    <p class="muted">Loading…</p>
-  {:else if user && ingestUrl}
-    <section class="card">
-      <h2>Your ingest URL</h2>
-      <p class="hint">
-        Point your health exporter here. Everything posted to this URL is
-        stored against your account ({$session?.data?.user?.email}).
-      </p>
-      <div class="url-row">
-        <code class="url">{ingestUrl}</code>
-        <button onclick={copyIngestUrl}>{copied ? 'Copied!' : 'Copy'}</button>
-      </div>
-      <p class="hint">Try it:</p>
-      <code class="example">
-        curl -X POST -H 'Content-Type: application/json' --data-binary @export.json {ingestUrl}
-      </code>
-    </section>
-  {:else}
-    <p><a href="/login">Sign in</a> to see your ingest URL.</p>
-  {/if}
-</main>
+{#if $session?.isPending}
+  <p class="muted">Loading…</p>
+{:else if user && ingestUrl}
+  <h1>Your ingest URL</h1>
+  <p class="lede">
+    Point your health exporter here. Everything posted to this URL is stored
+    and encrypted against your account ({$session?.data?.user?.email}).
+  </p>
+  <section class="card">
+    <div class="url-row">
+      <code class="url">{ingestUrl}</code>
+      <button onclick={copyIngestUrl}>{copied ? 'Copied!' : 'Copy'}</button>
+    </div>
+    <p class="hint">Try it:</p>
+    <code class="example">
+      curl -X POST -H 'Content-Type: application/json' --data-binary @export.json {ingestUrl}
+    </code>
+  </section>
+{:else}
+  <h1>Welcome to burn-rate</h1>
+  <section class="card">
+    <p class="hint">
+      Sign in to get your personal ingest URL — a webhook that stores and
+      encrypts every health sample against your account.
+    </p>
+    <a class="signin" href="/login">Sign in</a>
+  </section>
+{/if}
 
 <style>
-  main {
-    max-width: 64rem;
-    margin: 0 auto;
-    padding: var(--space-12) var(--space-6);
-  }
-
   h1 {
-    font-size: var(--text-4xl);
-    line-height: var(--leading-tight);
+    margin: 0 0 var(--space-3);
+    font-size: var(--text-3xl);
     font-weight: var(--font-bold);
     color: var(--color-frosting);
     text-shadow: var(--shadow-sprinkle);
   }
 
-  .dash {
-    color: var(--color-sprinkles);
+  .lede {
+    margin: 0 0 var(--space-6);
+    color: var(--color-text-muted);
   }
 
   .card {
-    margin-top: var(--space-6);
     background: var(--color-surface);
     border: 1px solid var(--color-crust);
     border-radius: var(--radius-doughnut);
@@ -80,11 +72,7 @@
     display: grid;
     gap: var(--space-3);
     justify-items: start;
-  }
-
-  h2 {
-    margin: 0;
-    font-size: var(--text-lg);
+    max-width: 44rem;
   }
 
   .hint,
@@ -147,7 +135,18 @@
     cursor: not-allowed;
   }
 
-  a {
-    color: var(--color-sky);
+  .signin {
+    padding: var(--space-2) var(--space-4);
+    border-radius: var(--radius-hole);
+    background: var(--color-frosting);
+    color: var(--color-on-frosting);
+    font-size: var(--text-sm);
+    font-weight: var(--font-medium);
+    text-decoration: none;
+    justify-self: start;
+  }
+
+  .signin:hover {
+    background: var(--color-frosting-strong);
   }
 </style>
