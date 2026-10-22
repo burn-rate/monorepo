@@ -58,9 +58,8 @@ Postgres transactions and constraints will enforce lending and repayment integri
 
 External timeseries data is normalized and stored in TimescaleDB (Tiger Cloud service `ckjasrhdwa`, DEV). The Worker connects through a Hyperdrive binding (`TIMESERIES_DB`).
 
-The existing D1 binding (`env.DB`) remains in the Worker configuration. Moving
-application records to Postgres and removing that binding are follow-up work in
-the [implementation plan](docs/activity-credit-plan.md).
+D1 is not used — TimescaleDB/Postgres is the single application database, and
+the former D1 binding has been removed from the Worker configuration.
 
 ## Timeseries database
 

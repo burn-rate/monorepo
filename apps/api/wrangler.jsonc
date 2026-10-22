@@ -8,14 +8,6 @@
   "observability": {
     "enabled": true
   },
-  "d1_databases": [
-    {
-      "binding": "DB",
-      "database_name": "burn-rate",
-      "database_id": "4705f3c4-e6f2-49f4-b537-76557a07dce5",
-      "migrations_dir": "migrations"
-    }
-  ],
   "r2_buckets": [
     {
       "binding": "HOOK_DUMPS",
