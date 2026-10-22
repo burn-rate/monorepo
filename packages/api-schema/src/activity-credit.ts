@@ -27,8 +27,12 @@ const policyVersion = z.literal('ring-consistency-v1');
 const utcTimestamp = z.iso.datetime().describe('UTC ISO timestamp.');
 
 /** Account identity comes only from the session and is never a public payload field. */
+/** Scale bounds a known credit score spans; the dashboard's donut maps onto them. */
+export const CREDIT_SCORE_MIN = 300;
+export const CREDIT_SCORE_MAX = 850;
+
 export const creditSnapshotSchema = z.object({
-  score: z.number().int().min(300).max(850).nullable(),
+  score: z.number().int().min(CREDIT_SCORE_MIN).max(CREDIT_SCORE_MAX).nullable(),
   creditLimitKcal: finite.min(250).max(2000),
   outstandingKcal: nonnegative,
   availableKcal: finite.describe('Limit minus full unpaid principal; may be negative.'),
