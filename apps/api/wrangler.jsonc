@@ -3,6 +3,7 @@
   "name": "burn-rate-api",
   "main": "src/index.ts",
   "compatibility_date": "2026-10-21",
+  "compatibility_flags": ["nodejs_compat"],
   "observability": {
     "enabled": true
   },

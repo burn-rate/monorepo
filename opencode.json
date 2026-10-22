@@ -1,0 +1,10 @@
+{
+  "mcp": {
+    "servers": {
+      "pg-aiguide": {
+        "type": "remote",
+        "url": "https://mcp.tigerdata.com/docs"
+      }
+    }
+  }
+}

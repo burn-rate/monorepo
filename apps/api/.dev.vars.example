@@ -1,3 +1,5 @@
 # Optional placeholders for the future external timeseries database integration.
+# Used by /timeseries/health in local dev (prod uses the Hyperdrive binding).
+# Example: postgres://tsdbadmin:PASSWORD@abc123.tsdb.cloud.timescale.com:34552/tsdb?sslmode=require
 TIMESERIES_DB_URL=""
 TIMESERIES_DB_TOKEN=""

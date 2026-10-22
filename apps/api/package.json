@@ -10,10 +10,12 @@
     "check": "tsc --noEmit"
   },
   "dependencies": {
-    "@burn-rate/api-schema": "workspace:*"
+    "@burn-rate/api-schema": "workspace:*",
+    "pg": "^8.23.1"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20261022.1",
+    "@types/pg": "^8.23.1",
     "typescript": "^6.0.0",
     "wrangler": "^4.151.3"
   }

@@ -1,10 +1,32 @@
-import { healthResponseSchema } from '@burn-rate/api-schema';
+import { healthResponseSchema, timeseriesHealthResponseSchema } from '@burn-rate/api-schema';
+import { getTimeseriesPool } from './timeseries';
 
 export interface Env {
   DB: D1Database;
   HOOK_DUMPS: R2Bucket;
   TIMESERIES_DB_URL?: string;
   TIMESERIES_DB_TOKEN?: string;
+  HYPERDRIVE?: Hyperdrive;
+}
+
+async function handleTimeseriesHealth(env: Env): Promise<Response> {
+  // Prod: Hyperdrive binding. Local dev: TIMESERIES_DB_URL from .dev.vars.
+  const url = env.TIMESERIES_DB_URL ?? env.HYPERDRIVE?.connectionString;
+  if (!url) {
+    return Response.json({ status: 'unconfigured' }, { status: 503 });
+  }
+
+  try {
+    const pool = getTimeseriesPool(url);
+    const { rows } = await pool.query('select version() as version');
+    return Response.json(
+      timeseriesHealthResponseSchema.parse({ status: 'ok', version: rows[0].version })
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'unknown error';
+    console.log(`[timeseries] health check failed: ${message}`);
+    return Response.json({ status: 'error', message }, { status: 503 });
+  }
 }
 
 async function handleHook(request: Request, env: Env, url: URL): Promise<Response> {
@@ -43,6 +65,10 @@ export default {
       return Response.json(
         healthResponseSchema.parse({ status: 'ok', service: 'burn-rate-api' })
       );
+    }
+
+    if (request.method === 'GET' && url.pathname === '/timeseries/health') {
+      return handleTimeseriesHealth(env);
     }
 
     if (url.pathname === '/hook') {
