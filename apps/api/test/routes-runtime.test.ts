@@ -145,3 +145,38 @@ describe('Worker runtime security and lifecycle', () => {
     expect(JSON.stringify(vi.mocked(console.error).mock.calls)).not.toContain('private');
   });
 });
+
+describe('Path-based ingestion /ingest/:userId', () => {
+  it('rejects unknown users before reading or retaining the body', async () => {
+    const { request, query, put } = harness();
+    query.mockResolvedValueOnce({ rows: [], rowCount: 0 }); // user lookup -> unknown
+    const response = await request('/ingest/nobody', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: 'sensitive body' });
+    expect(response.status).toBe(404);
+    expect(await response.json()).toMatchObject({ error: { code: 'unknown-user' } });
+    expect(put).not.toHaveBeenCalled();
+    expect(mocks.encrypt).not.toHaveBeenCalled();
+    expect(mocks.store).not.toHaveBeenCalled();
+  });
+
+  it('derives ownership from the URL, not the payload, and encrypts the dump before samples', async () => {
+    const { request, order, put, end } = harness();
+    mocks.store.mockImplementation(async () => { order.push('samples'); return 2; });
+    const response = await request('/ingest/url-owner?apiKey=query-secret', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...healthFixture, userId: 'spoofed' })
+    });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ ok: true, stored: 2 });
+    expect(order).toEqual(['dump', 'samples']);
+    // Ownership comes from the URL: payload userId is ignored everywhere.
+    expect(mocks.encrypt.mock.calls[0][2]).toBe('url-owner');
+    expect(mocks.store.mock.calls[0][2]).toBe('url-owner');
+    expect(mocks.store.mock.calls[0][3].every((s: { userId: string }) => s.userId === 'url-owner')).toBe(true);
+    expect(mocks.encrypt.mock.calls[0][4].path).toBe('/ingest/url-owner');
+    // Credential redaction: query strings never reach the encrypted dump, and
+    // retained R2 bytes are ciphertext (no fixture plaintext).
+    expect(JSON.stringify(mocks.encrypt.mock.calls[0][4])).not.toContain('query-secret');
+    expect(put.mock.calls[0][1]).not.toContain('Apple');
+    expect(end).toHaveBeenCalledTimes(1);
+  });
+});
