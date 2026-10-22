@@ -10,12 +10,7 @@
     "check": "tsc --noEmit"
   },
   "dependencies": {
-    "@better-auth/drizzle-adapter": "^1.7.12",
-    "@better-auth/passkey": "^1.7.12",
     "@burn-rate/api-schema": "workspace:*",
-    "@burn-rate/db": "workspace:*",
-    "better-auth": "^1.7.12",
-    "hono": "^4.13.13",
     "pg": "^8.23.1"
   },
   "devDependencies": {
