@@ -83,6 +83,38 @@ export type RevokedIngestionToken = {
     revoked: true;
 };
 
+export type LoanRequestRecord = {
+    id: string;
+    userId: string;
+    requestedAt: string;
+    status: 'requested';
+    treatId: 'donut' | 'beer';
+    treat: {
+        id: 'donut' | 'beer';
+        name: string;
+        serving: string;
+        caloriesKcal: number;
+        isEstimate: boolean;
+    };
+    principalKcal: number;
+    term: {
+        length: number;
+        unit: 'days' | 'weeks' | 'months';
+        timeZone: string;
+        startsAt: string;
+        dueAt: string;
+    };
+    requirement: {
+        metric: 'stand_hours';
+        target: number;
+    };
+};
+
+export type CreateLoanRequest = {
+    treatId: 'donut' | 'beer';
+    termUnit: 'days' | 'weeks' | 'months';
+};
+
 export type HookSuccess = {
     ok: true;
     dumpKey: string;
@@ -421,6 +453,31 @@ export type RevokeIngestionTokenResponses = {
 };
 
 export type RevokeIngestionTokenResponse = RevokeIngestionTokenResponses[keyof RevokeIngestionTokenResponses];
+
+export type CreateLoanRequestData = {
+    body: CreateLoanRequest;
+    path?: never;
+    query?: never;
+    url: '/loan';
+};
+
+export type CreateLoanRequestErrors = {
+    /**
+     * Invalid request or cursor.
+     */
+    400: ApiError;
+};
+
+export type CreateLoanRequestError = CreateLoanRequestErrors[keyof CreateLoanRequestErrors];
+
+export type CreateLoanRequestResponses = {
+    /**
+     * Stubbed loan request with computed term and placeholder requirement.
+     */
+    201: LoanRequestRecord;
+};
+
+export type CreateLoanRequestResponse = CreateLoanRequestResponses[keyof CreateLoanRequestResponses];
 
 export type UploadHealthPayloadData = {
     body: unknown;

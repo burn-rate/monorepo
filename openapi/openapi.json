@@ -359,6 +359,156 @@
           "revoked"
         ]
       },
+      "LoanRequestRecord": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "userId": {
+            "type": "string"
+          },
+          "requestedAt": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "requested"
+            ]
+          },
+          "treatId": {
+            "type": "string",
+            "enum": [
+              "donut",
+              "beer"
+            ]
+          },
+          "treat": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "enum": [
+                  "donut",
+                  "beer"
+                ]
+              },
+              "name": {
+                "type": "string"
+              },
+              "serving": {
+                "type": "string"
+              },
+              "caloriesKcal": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              "isEstimate": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "serving",
+              "caloriesKcal",
+              "isEstimate"
+            ]
+          },
+          "principalKcal": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "term": {
+            "type": "object",
+            "properties": {
+              "length": {
+                "type": "integer",
+                "exclusiveMinimum": 0
+              },
+              "unit": {
+                "type": "string",
+                "enum": [
+                  "days",
+                  "weeks",
+                  "months"
+                ]
+              },
+              "timeZone": {
+                "type": "string"
+              },
+              "startsAt": {
+                "type": "string"
+              },
+              "dueAt": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "length",
+              "unit",
+              "timeZone",
+              "startsAt",
+              "dueAt"
+            ]
+          },
+          "requirement": {
+            "type": "object",
+            "properties": {
+              "metric": {
+                "type": "string",
+                "enum": [
+                  "stand_hours"
+                ]
+              },
+              "target": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              }
+            },
+            "required": [
+              "metric",
+              "target"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "userId",
+          "requestedAt",
+          "status",
+          "treatId",
+          "treat",
+          "principalKcal",
+          "term",
+          "requirement"
+        ]
+      },
+      "CreateLoanRequest": {
+        "type": "object",
+        "properties": {
+          "treatId": {
+            "type": "string",
+            "enum": [
+              "donut",
+              "beer"
+            ]
+          },
+          "termUnit": {
+            "type": "string",
+            "enum": [
+              "days",
+              "weeks",
+              "months"
+            ]
+          }
+        },
+        "required": [
+          "treatId",
+          "termUnit"
+        ]
+      },
       "HookSuccess": {
         "type": "object",
         "properties": {
@@ -1090,6 +1240,47 @@
           },
           "503": {
             "description": "Service unavailable; retry later.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/loan": {
+      "post": {
+        "operationId": "createLoanRequest",
+        "tags": [
+          "loans"
+        ],
+        "description": "Stub: validates a treat loan request and echoes the agreed terms. No credit decision, persistence, or session requirement yet.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateLoanRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Stubbed loan request with computed term and placeholder requirement.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoanRequestRecord"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request or cursor.",
             "content": {
               "application/json": {
                 "schema": {

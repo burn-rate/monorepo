@@ -29,6 +29,7 @@
       {#if $session?.isPending}
         <!-- Session still resolving: render nothing rather than flash the wrong CTA. -->
       {:else if user}
+        <a href="/loans" class="navlink">Loans</a>
         <span class="who">{user.email}</span>
         <button class="signout" onclick={signOut} disabled={signingOut}>
           Sign out
@@ -98,6 +99,18 @@
     display: flex;
     align-items: center;
     gap: var(--space-3);
+  }
+
+  .navlink {
+    color: var(--color-sky);
+    font-size: var(--text-sm);
+    font-weight: var(--font-medium);
+    text-decoration: none;
+  }
+
+  .navlink:hover {
+    color: var(--color-sky-strong);
+    text-decoration: underline;
   }
 
   .who {

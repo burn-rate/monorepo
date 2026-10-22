@@ -3,9 +3,10 @@ import {
   apiErrorSchema, createIngestionTokenResponseSchema, createIngestionTokenSchema,
   currentUserSchema, healthResponseSchema, healthSamplesQuerySchema,
   healthSamplesResponseSchema, hookStorageFailureSchema, hookSuccessSchema,
-  ingestionTokensResponseSchema, metricsResponseSchema, revokeIngestionTokenResponseSchema,
+  ingestionTokensResponseSchema, loanRequestInputSchema, loanRequestResponseSchema,
+  metricsResponseSchema, revokeIngestionTokenResponseSchema,
   timeseriesHealthResponseSchema,
-  type CreateIngestionTokenInput, type HealthSamplesQuery
+  type CreateIngestionTokenInput, type HealthSamplesQuery, type LoanRequestInput
 } from '@burn-rate/api-schema';
 import type { Context } from 'hono';
 
@@ -21,6 +22,7 @@ export interface ApiServices<B extends object> {
   createIngestionToken(context: ApiRequest<B>, input: CreateIngestionTokenInput): Promise<Response>;
   listIngestionTokens(context: ApiRequest<B>): Promise<Response>;
   revokeIngestionToken(context: ApiRequest<B>, id: string): Promise<Response>;
+  createLoanRequest(context: ApiRequest<B>, input: LoanRequestInput): Promise<Response>;
   ingest(context: ApiRequest<B>): Promise<Response>;
 }
 
@@ -65,6 +67,10 @@ export const applicationRoutes = {
     security: session, tags: ['ingestion credentials'], description: 'Revocation is idempotent for an already revoked credential owned by the session. Foreign IDs are indistinguishable from missing IDs.',
     request: { params: z.object({ id: z.string().min(1).max(256).openapi({ param: { name: 'id', in: 'path' } }) }) },
     responses: { 200: json(revokeIngestionTokenResponseSchema.openapi('RevokedIngestionToken'), 'Credential revoked.'), 404: json(failure, 'Credential not found.'), ...errors } }),
+  createLoanRequest: createRoute({ method: 'post', path: '/loan', operationId: 'createLoanRequest', tags: ['loans'],
+    description: 'Stub: validates a treat loan request and echoes the agreed terms. No credit decision, persistence, or session requirement yet.',
+    request: { body: { required: true, content: { 'application/json': { schema: loanRequestInputSchema.openapi('CreateLoanRequest') } } } },
+    responses: { 201: json(loanRequestResponseSchema.openapi('LoanRequestRecord'), 'Stubbed loan request with computed term and placeholder requirement.'), 400: errors[400] } }),
   hook: createRoute({ method: 'post', path: '/hook', operationId: 'uploadHealthPayload', security: bearer,
     tags: ['exporter'], description: 'Exporter ingestion only. A browser session does not authorize upload. Both supported exporter formats and unknown/non-JSON captures are encrypted before retention.',
     request: { body: { required: true, content: {
@@ -96,6 +102,7 @@ export function registerApiRoutes<B extends object>(app: OpenAPIHono<ApiEnvironm
   app.openapi(applicationRoutes.createIngestionToken, (c) => contractResponse(applicationRoutes.createIngestionToken, services.createIngestionToken(contextFor(c), c.req.valid('json'))), validationError);
   app.openapi(applicationRoutes.listIngestionTokens, (c) => contractResponse(applicationRoutes.listIngestionTokens, services.listIngestionTokens(contextFor(c))));
   app.openapi(applicationRoutes.revokeIngestionToken, (c) => contractResponse(applicationRoutes.revokeIngestionToken, services.revokeIngestionToken(contextFor(c), c.req.valid('param').id)), validationError);
+  app.openapi(applicationRoutes.createLoanRequest, (c) => contractResponse(applicationRoutes.createLoanRequest, services.createLoanRequest(contextFor(c), c.req.valid('json'))), validationError);
   // Register the body contract without a validator: ingestion must authenticate
   // and enforce its byte limit before parsing or retaining any request body.
   app.openAPIRegistry.registerPath(applicationRoutes.hook);
@@ -139,7 +146,8 @@ export function createOfflineContractApp() {
   registerApiRoutes(app, {
     timeseriesHealth: unavailable, getCurrentUser: unavailable, listMetrics: unavailable,
     listHealthSamples: unavailable, createIngestionToken: unavailable,
-    listIngestionTokens: unavailable, revokeIngestionToken: unavailable, ingest: unavailable
+    listIngestionTokens: unavailable, revokeIngestionToken: unavailable,
+    createLoanRequest: unavailable, ingest: unavailable
   });
   return app;
 }

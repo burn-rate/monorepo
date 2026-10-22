@@ -47,7 +47,8 @@ describe('frontend contracts', () => {
     const services: ApiServices<Record<string, never>> = {
       timeseriesHealth: unavailable, getCurrentUser: unavailable, listMetrics: unavailable,
       listHealthSamples: sampleRead, createIngestionToken: unavailable,
-      listIngestionTokens: unavailable, revokeIngestionToken: unavailable, ingest: unavailable
+      listIngestionTokens: unavailable, revokeIngestionToken: unavailable,
+      createLoanRequest: unavailable, ingest: unavailable
     };
     const app = new OpenAPIHono<ApiEnvironment<Record<string, never>>>();
     app.use('*', async (c, next) => { c.set('requestId', 'test-request'); await next(); });
@@ -69,6 +70,7 @@ describe('frontend contracts', () => {
       timeseriesHealth: unavailable, getCurrentUser: unavailable, listMetrics: unavailable,
       listHealthSamples: unavailable, createIngestionToken: unavailable,
       listIngestionTokens: unavailable, revokeIngestionToken: unavailable,
+      createLoanRequest: unavailable,
       ingest: async ({ request }) => { consumed = request.bodyUsed; return new Response(null, { status: 401 }); }
     });
     const response = await app.request('/hook', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{invalid' });

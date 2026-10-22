@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { CreateIngestionTokenData, CreateIngestionTokenErrors, CreateIngestionTokenResponses, GetCurrentUserData, GetCurrentUserErrors, GetCurrentUserResponses, GetHealthData, GetHealthResponses, GetTimeseriesHealthData, GetTimeseriesHealthErrors, GetTimeseriesHealthResponses, ListHealthSamplesData, ListHealthSamplesErrors, ListHealthSamplesResponses, ListIngestionTokensData, ListIngestionTokensErrors, ListIngestionTokensResponses, ListMetricsData, ListMetricsErrors, ListMetricsResponses, RevokeIngestionTokenData, RevokeIngestionTokenErrors, RevokeIngestionTokenResponses, UploadHealthPayloadData, UploadHealthPayloadErrors, UploadHealthPayloadResponses } from './types.gen';
+import type { CreateIngestionTokenData, CreateIngestionTokenErrors, CreateIngestionTokenResponses, CreateLoanRequestData, CreateLoanRequestErrors, CreateLoanRequestResponses, GetCurrentUserData, GetCurrentUserErrors, GetCurrentUserResponses, GetHealthData, GetHealthResponses, GetTimeseriesHealthData, GetTimeseriesHealthErrors, GetTimeseriesHealthResponses, ListHealthSamplesData, ListHealthSamplesErrors, ListHealthSamplesResponses, ListIngestionTokensData, ListIngestionTokensErrors, ListIngestionTokensResponses, ListMetricsData, ListMetricsErrors, ListMetricsResponses, RevokeIngestionTokenData, RevokeIngestionTokenErrors, RevokeIngestionTokenResponses, UploadHealthPayloadData, UploadHealthPayloadErrors, UploadHealthPayloadResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -101,6 +101,18 @@ export const revokeIngestionToken = <ThrowOnError extends boolean = false>(optio
         }],
     url: '/api/ingestion-tokens/{id}',
     ...options
+});
+
+/**
+ * Stub: validates a treat loan request and echoes the agreed terms. No credit decision, persistence, or session requirement yet.
+ */
+export const createLoanRequest = <ThrowOnError extends boolean = false>(options: Options<CreateLoanRequestData, ThrowOnError>): RequestResult<CreateLoanRequestResponses, CreateLoanRequestErrors, ThrowOnError> => (options.client ?? client).post<CreateLoanRequestResponses, CreateLoanRequestErrors, ThrowOnError>({
+    url: '/loan',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**

@@ -1,4 +1,19 @@
 {
   "version": 1,
-  "treats": []
+  "treats": [
+    {
+      "id": "donut",
+      "name": "Donut",
+      "serving": "1 donut",
+      "caloriesKcal": 400,
+      "isEstimate": true
+    },
+    {
+      "id": "beer",
+      "name": "Beer",
+      "serving": "1 pint",
+      "caloriesKcal": 200,
+      "isEstimate": true
+    }
+  ]
 }

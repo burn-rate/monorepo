@@ -9,6 +9,7 @@ import { authenticateIngestionToken, createIngestionToken, listIngestionTokens, 
 import { CryptoFailure, encryptDump, type CryptoConfig } from './crypto';
 import { InvalidSampleQuery, listEncryptedSamples, storeEncryptedSamples } from './encrypted-store';
 import { mapPayload } from './ingest';
+import { stubLoanRequest } from './loans/catalog';
 import { enforceRateLimit, positiveLimit, readBoundedBody, RequestFailure } from './limits';
 import { registerApiRoutes, type ApiEnvironment, type ApiRequest } from './routes';
 
@@ -143,6 +144,9 @@ export function createApp(connect: (env: Env) => Promise<Sql> = getSql) {
         throw new RequestFailure(404, 'not-found', 'Credential not found');
       }
       return Response.json({ revoked: true });
+    },
+    async createLoanRequest(_ctx, input) {
+      return Response.json(stubLoanRequest(input), { status: 201 });
     },
     async ingest(ctx) {
       // Invalid credentials are rejected before reading or retaining the body.
