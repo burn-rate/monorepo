@@ -1,6 +1,8 @@
 <script lang="ts">
   import { authClient } from '#lib/auth-client.ts';
+  import CreditScoreDonut from '#lib/components/CreditScoreDonut.svelte';
   import { API_URL } from '$app/env/public';
+  import ActivityCharts from '#lib/components/ActivityCharts.svelte';
 
   const session = authClient.useSession();
 
@@ -28,16 +30,20 @@
     Point your health exporter here. Everything posted to this URL is stored
     and encrypted against your account ({$session?.data?.user?.email}).
   </p>
-  <section class="card">
-    <div class="url-row">
-      <code class="url">{ingestUrl}</code>
-      <button onclick={copyIngestUrl}>{copied ? 'Copied!' : 'Copy'}</button>
-    </div>
-    <p class="hint">Try it:</p>
-    <code class="example">
-      curl -X POST -H 'Content-Type: application/json' --data-binary @export.json {ingestUrl}
-    </code>
-  </section>
+  <div class="dashboard">
+    <CreditScoreDonut />
+    <section class="card">
+      <div class="url-row">
+        <code class="url">{ingestUrl}</code>
+        <button onclick={copyIngestUrl}>{copied ? 'Copied!' : 'Copy'}</button>
+      </div>
+      <p class="hint">Try it:</p>
+      <code class="example">
+        curl -X POST -H 'Content-Type: application/json' --data-binary @export.json {ingestUrl}
+      </code>
+    </section>
+  </div>
+  <ActivityCharts />
 {:else}
   <h1>Welcome to burn-rate</h1>
   <section class="card">
@@ -61,6 +67,19 @@
   .lede {
     margin: 0 0 var(--space-6);
     color: var(--color-text-muted);
+  }
+
+  .dashboard {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: var(--space-5);
+    align-items: start;
+  }
+
+  @media (max-width: 56rem) {
+    .dashboard {
+      grid-template-columns: 1fr;
+    }
   }
 
   .card {
