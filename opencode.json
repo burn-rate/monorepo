@@ -4,6 +4,10 @@
       "pg-aiguide": {
         "type": "remote",
         "url": "https://mcp.tigerdata.com/docs"
+      },
+      "tiger": {
+        "type": "local",
+        "command": ["tiger", "mcp", "start"]
       }
     }
   }
