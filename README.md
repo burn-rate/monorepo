@@ -4,12 +4,25 @@ Minimal TypeScript monorepo using pnpm workspaces and Turborepo.
 
 ```text
 apps/
-  api/          Cloudflare Worker API, with a D1 binding
+  api/          Cloudflare Worker API, with TimescaleDB ingestion
   dashboard/    SvelteKit dashboard
   marketing/    Static Astro marketing site
 packages/
   api-schema/   Shared Zod schemas and inferred TypeScript API types
 ```
+
+## Activity credit planning
+
+The [activity credit contract](docs/activity-credit-contract.md) defines ring-based
+treat loans, calorie credit limits, activity repayment, and exclusive allocation
+to the eligible loan due soonest. The [PR and implementation plan](docs/activity-credit-plan.md)
+separates the lending scaffold from future feature work.
+
+Draft type-only boundaries are exported from `@burn-rate/api-schema/activity-credit`.
+The versioned [treat catalog](data/treats.json) is an empty scaffold pending sourced
+entries and will seed the runtime catalog in TimescaleDB/Postgres. All application
+data will use that single database. Scoring, lending, and repayment
+behavior are not implemented.
 
 ## Development
 
@@ -37,19 +50,16 @@ pnpm build  # Build frontends and bundle the Worker without deploying
 
 The Worker exposes `GET /health` as a starter route. Its response schema and TypeScript type live in `@burn-rate/api-schema`, which both the API and dashboard can import directly. Workspace source is bundled by the consuming app, so the shared package needs no separate build step.
 
-D1 is the primary database, available as `env.DB`. Wrangler uses a local database during development. Before deploying, create a real database and replace the all-zero `database_id` in `apps/api/wrangler.jsonc` with the ID returned by:
-
-```sh
-pnpm --filter @burn-rate/api exec wrangler d1 create burn-rate
-```
-
-Add SQL migrations to `apps/api/migrations/` as the data model takes shape, then apply them locally with:
-
-```sh
-pnpm --filter @burn-rate/api exec wrangler d1 migrations apply DB --local
-```
+TimescaleDB/Postgres is the planned single application database. Activity
+observations use Timescale hypertables; users, treats, loans, decisions, balances,
+and repayment allocations use regular Postgres tables in the same database.
+Postgres transactions and constraints will enforce lending and repayment integrity.
 
 External timeseries data is normalized and stored in TimescaleDB (Tiger Cloud service `ckjasrhdwa`, DEV). The Worker connects through a Hyperdrive binding (`TIMESERIES_DB`).
+
+The existing D1 binding (`env.DB`) remains in the Worker configuration. Moving
+application records to Postgres and removing that binding are follow-up work in
+the [implementation plan](docs/activity-credit-plan.md).
 
 ## Timeseries database
 
@@ -61,7 +71,9 @@ psql "$TIMESERIES_DB_URL" -f apps/api/timescale/001_init.sql
 
 It creates the `metrics` registry, the `health_samples` hypertable (dedup key: `user_id, metric, time, ended_at, source_name`), columnstore policies, and the `health_daily` continuous aggregate.
 
-Before deploying, create a Hyperdrive config pointed at the origin database and replace the all-zero `id` in `apps/api/wrangler.jsonc` with the ID returned by:
+The development Hyperdrive ID is configured in `apps/api/wrangler.jsonc`. For a
+new environment, create a Hyperdrive config pointed at its origin database and
+update the `TIMESERIES_DB` binding's `id` with the ID returned by:
 
 ```sh
 pnpm --filter @burn-rate/api exec wrangler hyperdrive create burn-rate-timeseries --connection-string="$TIMESERIES_DB_URL"
@@ -74,9 +86,9 @@ For local development, copy `.dev.vars.example` to `.dev.vars` and set `WRANGLER
 `POST /hook` accepts health payloads in either known shape — `health-exporter.v1` batches (`{schemaVersion, samples: [...]}`) or metrics exports (`{data: {metrics: [...]}}`). The pipeline dumps the raw payload to R2 (lineage), detects the format, maps it to the normalized sample schema in `@burn-rate/api-schema` (unknown metrics are dropped and logged), and upserts into `health_samples`. Run the mapping tests with:
 
 ```sh
-pnpm --filter @burn-rate/api test
+pnpm --filter @burn-rate/api exec vitest run
 ```
 
-The dashboard uses SvelteKit's automatic adapter until a hosting target is selected. The marketing site builds to static files. No cloud resources are provisioned by this scaffold.
+The dashboard uses SvelteKit's automatic adapter until a hosting target is selected. The marketing site builds to static files. Cloud resources are configured separately from the local build.
 
 Framework references: [Turborepo workspaces](https://turborepo.dev/docs/crafting-your-repository/structuring-a-repository), [SvelteKit project structure](https://svelte.dev/docs/kit/project-structure), [Astro setup](https://docs.astro.build/en/install-and-setup/), and [Wrangler configuration](https://developers.cloudflare.com/workers/wrangler/configuration/).
