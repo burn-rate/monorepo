@@ -187,6 +187,46 @@ export function createApp(connect: (env: Env) => Promise<Sql> = getSql) {
     }
   });
 
+  // Path-based ingestion: the URL's user id attributes stored samples. Kept
+  // alongside token ingestion for simple exporters. Unknown ids are rejected
+  // before the body is read or anything is retained.
+  app.post('/ingest/:userId', async c => {
+    const userId = c.req.param('userId');
+    const sql = await sqlFor(c.req.raw, c.env);
+    const known = await sql.query('select 1 from "user" where id = $1', [userId]);
+    if (known.rows.length === 0) throw new RequestFailure(404, 'unknown-user', 'No account matches this ingest URL');
+    await enforceRateLimit(sql, 'upload', userId, positiveLimit(c.env.UPLOADS_PER_MINUTE, 60, 10000));
+    const raw = await readBoundedBody(c.req.raw, positiveLimit(c.env.MAX_UPLOAD_BYTES, 5 * 1024 * 1024, 25 * 1024 * 1024));
+    let body: unknown = raw;
+    try { body = JSON.parse(raw); } catch { /* Unknown/non-JSON captures remain encrypted. */ }
+    const dumpId = crypto.randomUUID();
+    const dumpKey = `encrypted/${userId}/${dumpId}.json`;
+    const receivedAt = new Date().toISOString();
+    const contentType = c.req.header('content-type')?.split(';')[0];
+    const dump = {
+      receivedAt, method: 'POST', path: `/ingest/${userId}`,
+      headers: contentType && ['application/json', 'text/plain', 'application/octet-stream'].includes(contentType) ? { 'content-type': contentType } : {},
+      body
+    };
+    let ingest: ReturnType<typeof mapPayload> | undefined;
+    let retained = false;
+    try {
+      const envelope = await encryptDump(sql, c.env, userId, dumpKey, dump);
+      const storedDump = await c.env.HOOK_DUMPS.put(dumpKey, JSON.stringify(envelope), {
+        httpMetadata: { contentType: 'application/json' }, customMetadata: { encrypted: '1', ownerId: userId }
+      });
+      if (!storedDump) throw new Error('dump-write-failed');
+      retained = true;
+      ingest = mapPayload(body, dumpKey, userId);
+      const stored = await storeEncryptedSamples(sql, c.env, userId, ingest.samples);
+      console.info(JSON.stringify({ requestId: c.get('requestId'), code: 'path-upload-accepted', userId, received: ingest.received, stored, dropped: ingest.dropped }));
+      return Response.json({ ok: true, dumpKey, stored, ingest: { format: ingest.format, received: ingest.received, mapped: ingest.mapped, dropped: ingest.dropped, droppedBy: {} } });
+    } catch {
+      console.error(JSON.stringify({ requestId: c.get('requestId'), code: retained ? 'sample-storage-failed' : 'dump-storage-failed', userId }));
+      return Response.json({ ok: false, ...(retained ? { dumpKey } : {}), error: retained ? 'timeseries-storage-failed' : 'encrypted-dump-storage-failed' }, { status: 502 });
+    }
+  });
+
   app.all('/hook', c => {
     c.header('Allow', 'POST');
     return c.json({ error: { code: 'method-not-allowed', message: 'Only POST is accepted', requestId: c.get('requestId') } }, 405);

@@ -9,8 +9,8 @@ export interface IngestResult extends IngestStats {
 
 /**
  * Full mapping pipeline: detect the format, select the mapper, map and filter
- * to normalized samples. Unknown metrics are dropped (counted in the stats)
- * rather than stored.
+ * to normalized samples attributed to `userId`. Unknown metrics are dropped
+ * (counted in the stats) rather than stored.
  */
 export function mapPayload(body: unknown, dumpKey: string, userId: string): IngestResult {
   const format = detectFormat(body);
